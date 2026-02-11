@@ -93,6 +93,7 @@ function safeRead(filePath, maxChars = 10_000) {
         return "";
     }
 }
+const activityEmitState = new Map();
 function activityFilePath(projectPath) {
     const canonical = resolve(projectPath);
     const key = createHash("sha256").update(canonical).digest("hex");
@@ -142,6 +143,16 @@ function withRecentActivity(projectPath, baseText, tool, summary) {
     recordActivity(projectPath, tool, summary);
     const recents = recentActivity(projectPath, 5);
     if (recents.length === 0)
+        return baseText;
+    const projectKey = resolve(projectPath);
+    const signature = JSON.stringify(recents);
+    const prev = activityEmitState.get(projectKey);
+    const hasOtherToolInRecent = recents.some((r) => r.tool !== tool);
+    const shouldEmit = !prev ||
+        prev.lastTool !== tool ||
+        (prev.lastSignature !== signature && hasOtherToolInRecent);
+    activityEmitState.set(projectKey, { lastTool: tool, lastSignature: signature });
+    if (!shouldEmit)
         return baseText;
     const lines = [
         "",
