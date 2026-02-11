@@ -162,6 +162,25 @@ Detailed report:
 - `docs/REAL_WORLD_MCP_VALIDATION.md`
 - `docs/AGENT_WORKFLOW.md`
 
+## Open Source Workflow
+
+This repository includes a standard OSS contribution flow:
+
+- `CONTRIBUTING.md` for contribution and local validation steps
+- `SECURITY.md` for vulnerability reporting policy
+- `CODE_OF_CONDUCT.md` for contributor behavior standards
+- `.github/ISSUE_TEMPLATE/` for structured bug/feature reports
+- `.github/pull_request_template.md` for consistent PR submissions
+- `.github/workflows/ci.yml` for automated Rust + MCP build checks
+
+Recommended flow:
+
+1. Open an issue (bug/feature template)
+2. Create a branch from `main`
+3. Implement and run local checks
+4. Open a PR using the template
+5. Merge after CI passes and review feedback is addressed
+
 ## Decision Tracking
 
 ctx-agent extracts architectural decisions from your git history using [conventional commits](https://www.conventionalcommits.org/):
