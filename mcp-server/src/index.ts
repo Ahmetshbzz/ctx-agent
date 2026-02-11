@@ -247,21 +247,18 @@ function buildProjectOverview(projectPath: string): ProjectOverview {
     };
 }
 
-function bootstrapOverviewIfNeeded(projectPath: string): string | null {
+function ensureOverviewNoteIfNeeded(projectPath: string): "saved" | "skipped" | "failed" {
     const statusJson = runCtxArgv(["status", "--json"], projectPath);
-    if (!statusJson.success) return null;
-    let parsed: { knowledge_notes?: number } | null = null;
+    if (!statusJson.success) return "failed";
     try {
-        parsed = JSON.parse(statusJson.output) as { knowledge_notes?: number };
+        const parsed = JSON.parse(statusJson.output) as { knowledge_notes?: number };
+        if ((parsed.knowledge_notes ?? 0) > 0) return "skipped";
     } catch {
-        parsed = null;
+        return "failed";
     }
-    if (!parsed || (parsed.knowledge_notes ?? 0) > 0) return null;
-
     const overview = buildProjectOverview(projectPath);
     const saved = runCtxArgv(["learn", overview.note], projectPath);
-    if (!saved.success) return null;
-    return overview.note;
+    return saved.success ? "saved" : "failed";
 }
 
 // ── Shared schema fragments ─────────────────────────────────────────
@@ -295,14 +292,20 @@ server.tool(
 
 server.tool(
     "ctx_status",
-    "Get project dashboard: total files, lines of code, symbols, dependencies, decisions, knowledge notes, and language breakdown. If there are no knowledge notes yet, it automatically creates and saves a first project overview note.",
+    "Get project dashboard: total files, lines of code, symbols, dependencies, decisions, knowledge notes, and language breakdown. Always appends a compact project overview (purpose, users, modules, critical flows). If there are no knowledge notes yet, it automatically saves the first overview note.",
     ProjectPathSchema.shape,
     async ({ project_path }) => {
-        const overviewNote = bootstrapOverviewIfNeeded(project_path);
+        const noteStatus = ensureOverviewNoteIfNeeded(project_path);
+        const overview = buildProjectOverview(project_path);
         const { output } = runCtxArgv(["status"], project_path);
-        const suffix = overviewNote
-            ? `\n\nAuto overview bootstrap:\n${overviewNote}`
-            : "";
+        const suffix = [
+            "",
+            "",
+            "Project overview:",
+            ...overview.bullets,
+            "",
+            `Overview note status: ${noteStatus}`,
+        ].join("\n");
         return { content: [{ type: "text" as const, text: `${output}${suffix}` }] };
     }
 );
@@ -427,20 +430,7 @@ server.tool(
         const overview = buildProjectOverview(project_path);
         let saved = "skipped";
         if (save_note !== false) {
-            const statusJson = runCtxArgv(["status", "--json"], project_path);
-            let hasNotes = false;
-            if (statusJson.success) {
-                try {
-                    const parsed = JSON.parse(statusJson.output) as { knowledge_notes?: number };
-                    hasNotes = (parsed.knowledge_notes ?? 0) > 0;
-                } catch {
-                    hasNotes = false;
-                }
-            }
-            if (!hasNotes) {
-                const result = runCtxArgv(["learn", overview.note], project_path);
-                saved = result.success ? "saved" : "failed";
-            }
+            saved = ensureOverviewNoteIfNeeded(project_path);
         }
 
         const text = [
