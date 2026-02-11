@@ -8,6 +8,8 @@ Use `ctx-agent` as the first context layer so each agent session starts with pro
 
 1. Project overview
 - `ctx_status`
+- If this is the first run (`knowledge_notes = 0`), `ctx_status` auto-bootstraps and stores an overview note
+- `ctx_overview` (explicit project brief generation)
 - `ctx_map` (optional for structure-heavy tasks)
 
 2. Risk check before edits
@@ -41,4 +43,3 @@ ctx-agent -p /path/to/project query "auth" --json
 ctx-agent -p /path/to/project blast-radius src/db/mod.rs --json
 ctx-agent -p /path/to/project scan --json
 ```
-

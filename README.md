@@ -274,9 +274,11 @@ Add to your MCP config (e.g. `mcp_config.json`):
 | `ctx_decisions` | Decision history |
 | `ctx_learn` | Store knowledge notes |
 | `ctx_warnings` | Codebase health warnings |
+| `ctx_overview` | Agent-ready project brief (purpose, users, modules, flows) |
 
 > **Auto-init:** If a project hasn't been initialized, any MCP tool call will auto-run `ctx-agent init` first. No manual setup needed.
-> **Watch behavior:** `ctx-agent` does not watch projects globally by default. Watching starts only when you run `ctx-agent watch` for a project.
+> **Auto overview bootstrap:** `ctx_status` now auto-creates a first project overview note when `knowledge_notes = 0`.
+> **Watch behavior:** agent commands auto-start per-project background watch by default (disable with `CTX_AGENT_DISABLE_AUTO_WATCH=1`).
 
 ## Architecture
 
@@ -317,7 +319,7 @@ ctx-agent/
 │   └── watcher/
 │       └── mod.rs           # File watcher daemon
 └── mcp-server/
-    ├── src/index.ts         # TypeScript MCP server (auto-init)
+    ├── src/index.ts         # TypeScript MCP server (auto-init + overview bootstrap)
     ├── tsconfig.json
     └── package.json
 ```
