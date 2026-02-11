@@ -15,6 +15,7 @@ Use `ctx-agent` as the first context layer so each agent session starts with pro
 2. Risk check before edits
 - `ctx_warnings`
 - `ctx_blast_radius` on candidate files
+- `ctx_guard` for paranoid auth/session/token/crypto gate (BLOCK/PASS)
 
 3. Target discovery
 - `ctx_query "<feature-or-bug-keyword>"`

@@ -275,10 +275,12 @@ Add to your MCP config (e.g. `mcp_config.json`):
 | `ctx_learn` | Store knowledge notes |
 | `ctx_warnings` | Codebase health warnings |
 | `ctx_overview` | Agent-ready project brief (purpose, users, modules, flows) |
+| `ctx_guard` | Paranoid security gate for auth/session/token/crypto changes |
 
 > **Auto-init:** If a project hasn't been initialized, any MCP tool call will auto-run `ctx-agent init` first. No manual setup needed.
 > **Auto overview bootstrap:** `ctx_status` now auto-creates a first project overview note when `knowledge_notes = 0`.
 > **Watch behavior:** agent commands auto-start per-project background watch by default (disable with `CTX_AGENT_DISABLE_AUTO_WATCH=1`).
+> **Paranoid mode:** Enabled by default in MCP (`CTX_PARANOID=1`). `ctx_status` includes a security guard section and can report `BLOCK` for sensitive changes missing critical controls.
 
 ## Architecture
 

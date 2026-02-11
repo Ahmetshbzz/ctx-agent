@@ -179,6 +179,16 @@ interface ProjectOverview {
     note: string;
 }
 
+interface GuardReport {
+    mode: "paranoid" | "off";
+    touchedFiles: string[];
+    sensitiveFiles: string[];
+    requiredControls: string[];
+    missingControls: string[];
+    status: "pass" | "block";
+    risk: "low" | "medium" | "high" | "critical";
+}
+
 function buildProjectOverview(projectPath: string): ProjectOverview {
     const sourceCandidates = [
         "README.md",
@@ -261,6 +271,144 @@ function ensureOverviewNoteIfNeeded(projectPath: string): "saved" | "skipped" | 
     return saved.success ? "saved" : "failed";
 }
 
+function paranoidModeEnabled(): boolean {
+    const value = (process.env.CTX_PARANOID ?? "1").toLowerCase();
+    return !(value === "0" || value === "false" || value === "off");
+}
+
+function runGit(projectPath: string, args: string[]): string {
+    try {
+        return execFileSync("git", args, {
+            cwd: projectPath,
+            encoding: "utf-8",
+            timeout: 15_000,
+            env: { ...process.env, NO_COLOR: "1" },
+            maxBuffer: 5 * 1024 * 1024,
+        }).trim();
+    } catch {
+        return "";
+    }
+}
+
+function getTouchedFiles(projectPath: string): string[] {
+    const outputs = [
+        runGit(projectPath, ["diff", "--name-only"]),
+        runGit(projectPath, ["diff", "--name-only", "--cached"]),
+        runGit(projectPath, ["ls-files", "--others", "--exclude-standard"]),
+    ];
+    const files = new Set<string>();
+    for (const chunk of outputs) {
+        for (const line of chunk.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (trimmed) files.add(trimmed);
+        }
+    }
+    return Array.from(files).sort();
+}
+
+function isSensitivePath(filePath: string): boolean {
+    const p = filePath.toLowerCase();
+    return /(auth|session|token|jwt|crypto|cipher|tls|oauth|password|secret|cookie|csrf|admin)/.test(
+        p
+    );
+}
+
+function hasRepoPattern(projectPath: string, pattern: string): boolean {
+    try {
+        execFileSync(
+            "rg",
+            [
+                "--no-messages",
+                "--glob",
+                "!**/node_modules/**",
+                "--glob",
+                "!**/dist/**",
+                "--glob",
+                "!**/target/**",
+                "-n",
+                "-S",
+                pattern,
+                projectPath,
+            ],
+            { encoding: "utf-8", timeout: 15_000, maxBuffer: 5 * 1024 * 1024 }
+        );
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function buildGuardReport(projectPath: string): GuardReport {
+    if (!paranoidModeEnabled()) {
+        return {
+            mode: "off",
+            touchedFiles: [],
+            sensitiveFiles: [],
+            requiredControls: [],
+            missingControls: [],
+            status: "pass",
+            risk: "low",
+        };
+    }
+
+    const touchedFiles = getTouchedFiles(projectPath);
+    const sensitiveFiles = touchedFiles.filter(isSensitivePath);
+    const requiredControls = [
+        "refresh token rotation",
+        "refresh token replay/reuse detection",
+        "global revoke on token reuse",
+        "rate limiting / throttling on auth endpoints",
+        "security-focused tests for auth/session flows",
+    ];
+
+    const controls: Array<{ name: string; ok: boolean }> = [
+        {
+            name: "refresh token rotation",
+            ok: hasRepoPattern(projectPath, "(rotate.?session|token.?rotation|refresh.?token)"),
+        },
+        {
+            name: "refresh token replay/reuse detection",
+            ok: hasRepoPattern(projectPath, "(reuse|replay|token.?family)"),
+        },
+        {
+            name: "global revoke on token reuse",
+            ok: hasRepoPattern(projectPath, "(revoke.?all|revokeall|invalidate.?all)"),
+        },
+        {
+            name: "rate limiting / throttling on auth endpoints",
+            ok: hasRepoPattern(projectPath, "(rate.?limit|throttle|too.?many.?requests)"),
+        },
+        {
+            name: "security-focused tests for auth/session flows",
+            ok: hasRepoPattern(projectPath, "(auth|session|token|refresh).*(test|spec)|(test|spec).*(auth|session|token|refresh)"),
+        },
+    ];
+
+    const missingControls = controls.filter((c) => !c.ok).map((c) => c.name);
+
+    if (sensitiveFiles.length === 0) {
+        return {
+            mode: "paranoid",
+            touchedFiles,
+            sensitiveFiles,
+            requiredControls,
+            missingControls: [],
+            status: "pass",
+            risk: touchedFiles.length > 0 ? "medium" : "low",
+        };
+    }
+
+    return {
+        mode: "paranoid",
+        touchedFiles,
+        sensitiveFiles,
+        requiredControls,
+        missingControls,
+        status: missingControls.length === 0 ? "pass" : "block",
+        risk: missingControls.length === 0 ? "high" : "critical",
+    };
+}
+
 // ── Shared schema fragments ─────────────────────────────────────────
 
 const ProjectPathSchema = z.object({
@@ -297,7 +445,24 @@ server.tool(
     async ({ project_path }) => {
         const noteStatus = ensureOverviewNoteIfNeeded(project_path);
         const overview = buildProjectOverview(project_path);
+        const guard = buildGuardReport(project_path);
         const { output } = runCtxArgv(["status"], project_path);
+        const guardLines = [
+            "Security guard:",
+            `Mode: ${guard.mode}`,
+            `Status: ${guard.status.toUpperCase()} (risk: ${guard.risk})`,
+            `Touched files: ${guard.touchedFiles.length}`,
+            `Sensitive files: ${guard.sensitiveFiles.length}`,
+        ];
+        if (guard.sensitiveFiles.length > 0) {
+            guardLines.push("Sensitive paths:");
+            guard.sensitiveFiles.slice(0, 10).forEach((f) => guardLines.push(`- ${f}`));
+        }
+        if (guard.status === "block") {
+            guardLines.push("Missing controls:");
+            guard.missingControls.forEach((m) => guardLines.push(`- ${m}`));
+        }
+
         const suffix = [
             "",
             "",
@@ -305,6 +470,8 @@ server.tool(
             ...overview.bullets,
             "",
             `Overview note status: ${noteStatus}`,
+            "",
+            ...guardLines,
         ].join("\n");
         return { content: [{ type: "text" as const, text: `${output}${suffix}` }] };
     }
@@ -442,6 +609,36 @@ server.tool(
             `Knowledge note: ${saved}`,
         ].join("\n");
         return { content: [{ type: "text" as const, text }] };
+    }
+);
+
+// ── Tool: ctx_guard ─────────────────────────────────────────────────
+
+server.tool(
+    "ctx_guard",
+    "Run paranoid security guard checks. If auth/session/token/crypto-related files are touched, this gate can return BLOCK unless critical controls are present (rotation, replay detection, global revoke, rate limiting, and tests).",
+    ProjectPathSchema.shape,
+    async ({ project_path }) => {
+        const guard = buildGuardReport(project_path);
+        const lines = [
+            "Security guard report:",
+            `Mode: ${guard.mode}`,
+            `Status: ${guard.status.toUpperCase()}`,
+            `Risk: ${guard.risk}`,
+            `Touched files: ${guard.touchedFiles.length}`,
+            `Sensitive files: ${guard.sensitiveFiles.length}`,
+        ];
+        if (guard.sensitiveFiles.length > 0) {
+            lines.push("Sensitive paths:");
+            guard.sensitiveFiles.forEach((f) => lines.push(`- ${f}`));
+        }
+        lines.push("Required controls:");
+        guard.requiredControls.forEach((c) => lines.push(`- ${c}`));
+        if (guard.missingControls.length > 0) {
+            lines.push("Missing controls:");
+            guard.missingControls.forEach((m) => lines.push(`- ${m}`));
+        }
+        return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     }
 );
 
