@@ -302,7 +302,7 @@ Add to your MCP config (e.g. `mcp_config.json`):
 > **Watch behavior:** agent commands auto-start per-project background watch by default (disable with `CTX_AGENT_DISABLE_AUTO_WATCH=1`).
 > **Paranoid mode:** Enabled by default in MCP (`CTX_PARANOID=1`). `ctx_status` includes a security guard section and can report `BLOCK` for sensitive changes missing critical controls.
 > **Search fallback:** `ctx_query` automatically falls back to `ctx-agent grep` (built-in, no external `rg` dependency) when symbol search returns no results.
-> **Activity memory:** Every MCP tool call is appended to a project activity journal (`~/.ctx-agent/activity/<project-hash>.jsonl`). The last-5 summary is shown on first call and when tool context changes, not on every repeated call.
+> **Activity memory:** Every MCP tool call is appended to a project activity journal (`~/.ctx-agent/activity/<project-hash>.jsonl`). The last-5 summary is shown once at the first tool response in a server session to avoid output spam.
 
 ## Architecture
 

@@ -114,8 +114,7 @@ interface ActivityEntry {
 }
 
 interface ActivityEmitState {
-    lastTool: string;
-    lastSignature: string;
+    emitted: boolean;
 }
 
 const activityEmitState = new Map<string, ActivityEmitState>();
@@ -175,15 +174,9 @@ function withRecentActivity(
     if (recents.length === 0) return baseText;
 
     const projectKey = resolve(projectPath);
-    const signature = JSON.stringify(recents);
     const prev = activityEmitState.get(projectKey);
-    const hasOtherToolInRecent = recents.some((r) => r.tool !== tool);
-    const shouldEmit =
-        !prev ||
-        prev.lastTool !== tool ||
-        (prev.lastSignature !== signature && hasOtherToolInRecent);
-
-    activityEmitState.set(projectKey, { lastTool: tool, lastSignature: signature });
+    const shouldEmit = !prev || !prev.emitted;
+    activityEmitState.set(projectKey, { emitted: true });
     if (!shouldEmit) return baseText;
 
     const lines = [
