@@ -19,12 +19,11 @@ pub struct Database {
 }
 
 impl Database {
-    /// Open or create the ctx database in the given project root
+    /// Open or create the project database in the global ctx store
     pub fn open(project_root: &Path) -> Result<Self> {
-        let ctx_dir = project_root.join(".ctx");
-        std::fs::create_dir_all(&ctx_dir).context("Failed to create .ctx directory")?;
+        let (ctx_dir, db_path) = Self::storage_paths(project_root)?;
+        std::fs::create_dir_all(&ctx_dir).context("Failed to create project ctx directory")?;
 
-        let db_path = ctx_dir.join("ctx.db");
         let conn = Connection::open(&db_path).context("Failed to open database")?;
 
         // Enable WAL mode for better concurrent access
@@ -44,7 +43,9 @@ impl Database {
 
     /// Check if the database exists for the project
     pub fn exists(project_root: &Path) -> bool {
-        project_root.join(".ctx").join("ctx.db").exists()
+        Self::storage_paths(project_root)
+            .map(|(_, db_path)| db_path.exists())
+            .unwrap_or(false)
     }
 
     // =================================================================
@@ -247,5 +248,20 @@ impl Database {
             }
         }
         Ok(())
+    }
+
+    fn storage_paths(project_root: &Path) -> Result<(PathBuf, PathBuf)> {
+        let canonical_root = std::fs::canonicalize(project_root)
+            .unwrap_or_else(|_| project_root.to_path_buf())
+            .to_string_lossy()
+            .to_string();
+
+        let home = std::env::var("HOME").context("HOME environment variable is not set")?;
+        let global_root = PathBuf::from(home).join(".ctx-agent").join("projects");
+        let project_key = blake3::hash(canonical_root.as_bytes()).to_hex().to_string();
+
+        let ctx_dir = global_root.join(project_key);
+        let db_path = ctx_dir.join("ctx.db");
+        Ok((ctx_dir, db_path))
     }
 }

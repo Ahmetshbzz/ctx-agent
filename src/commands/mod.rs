@@ -23,6 +23,8 @@ mod warnings;
 mod watch;
 
 pub fn run(command: Commands, root: &Path, json_mode: bool) -> Result<()> {
+    let is_watch_command = matches!(&command, Commands::Watch);
+
     match command {
         Commands::Init => init::cmd_init(root, json_mode)?,
         Commands::Scan => scan::cmd_scan(root, json_mode)?,
@@ -36,6 +38,11 @@ pub fn run(command: Commands, root: &Path, json_mode: bool) -> Result<()> {
         }
         Commands::Warnings => warnings::cmd_warnings(root, json_mode)?,
         Commands::Watch => watch::cmd_watch(root)?,
+    }
+
+    // Agent-first default: keep context fresh in background unless this invocation is already `watch`.
+    if !is_watch_command {
+        watcher::ensure_background_watch(root).ok();
     }
 
     Ok(())

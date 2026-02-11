@@ -20,9 +20,14 @@ pub(super) fn cmd_init(root: &Path, json_mode: bool) -> Result<()> {
 
     let start = Instant::now();
     let db = Database::open(root)?;
+    let db_path = db.ctx_dir.join("ctx.db");
 
     if !json_mode {
-        println!("  {} Created {}", "OK".green(), ".ctx/ctx.db".dimmed());
+        println!(
+            "  {} Created {}",
+            "OK".green(),
+            db_path.display().to_string().dimmed()
+        );
         print!("  Scanning project...");
     }
 
@@ -82,23 +87,6 @@ pub(super) fn cmd_init(root: &Path, json_mode: bool) -> Result<()> {
             "OK".green().bold(),
             elapsed.as_secs_f64()
         );
-    }
-
-    // Add .ctx to .gitignore if not already there
-    let gitignore_path = root.join(".gitignore");
-    if gitignore_path.exists() {
-        let content = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
-        if !content.contains(".ctx") {
-            let mut new_content = content;
-            if !new_content.ends_with('\n') {
-                new_content.push('\n');
-            }
-            new_content.push_str("\n# ctx context database\n.ctx/\n");
-            std::fs::write(&gitignore_path, new_content)?;
-            if !json_mode {
-                println!("  {} Added .ctx/ to .gitignore", "OK".green());
-            }
-        }
     }
 
     Ok(())

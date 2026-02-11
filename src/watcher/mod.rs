@@ -1,6 +1,8 @@
 use anyhow::Result;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
+use std::fs;
 use std::path::Path;
+use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -69,4 +71,58 @@ pub fn watch_project(project_root: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Ensure a background watcher process is running for this project.
+/// Intended for agent-driven workflows where explicit `watch` command is not called.
+pub fn ensure_background_watch(project_root: &Path) -> Result<()> {
+    if std::env::var("CTX_AGENT_DISABLE_AUTO_WATCH").ok().as_deref() == Some("1") {
+        return Ok(());
+    }
+
+    let project = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.to_path_buf());
+    let project_str = project.to_string_lossy().to_string();
+
+    if is_watch_running(&project_str) {
+        return Ok(());
+    }
+
+    let exe = std::env::current_exe()?;
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let log_dir = Path::new(&home).join(".ctx-agent").join("watch-logs");
+    fs::create_dir_all(&log_dir).ok();
+
+    let project_key = blake3::hash(project_str.as_bytes()).to_hex().to_string();
+    let log_path = log_dir.join(format!("{project_key}.log"));
+    let log_file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_path)?;
+    let err_file = log_file.try_clone()?;
+
+    Command::new(exe)
+        .arg("-p")
+        .arg(&project_str)
+        .arg("watch")
+        .env("CTX_AGENT_AUTO_WATCH", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log_file))
+        .stderr(Stdio::from(err_file))
+        .spawn()
+        .ok();
+
+    Ok(())
+}
+
+fn is_watch_running(project_path: &str) -> bool {
+    let pattern = format!("ctx -p {} watch", project_path);
+    let output = Command::new("pgrep")
+        .arg("-f")
+        .arg(&pattern)
+        .output();
+
+    match output {
+        Ok(out) => out.status.success() && !out.stdout.is_empty(),
+        Err(_) => false,
+    }
 }

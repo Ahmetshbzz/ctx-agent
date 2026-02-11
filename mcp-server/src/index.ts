@@ -44,8 +44,15 @@ const CTX_BIN = findCtxBinary();
 // ── Auto-init: ensure project is initialized ────────────────────────
 
 function ensureInitialized(projectPath: string): void {
-    const ctxDir = resolve(projectPath, ".ctx");
-    if (!existsSync(ctxDir)) {
+    try {
+        execSync(`"${CTX_BIN}" -p "${projectPath}" status --json`, {
+            encoding: "utf-8",
+            timeout: 20_000,
+            env: { ...process.env, NO_COLOR: "1" },
+            maxBuffer: 10 * 1024 * 1024,
+        });
+        return;
+    } catch {
         execSync(`"${CTX_BIN}" -p "${projectPath}" init`, {
             encoding: "utf-8",
             timeout: 60_000,
@@ -108,7 +115,7 @@ const server = new McpServer({
 
 server.tool(
     "ctx_init",
-    "Initialize ctx in a project directory. Creates .ctx/ database, scans all files, extracts symbols (functions, classes, structs), maps dependencies, and analyzes git history for decisions.",
+    "Initialize ctx in a project directory. Creates a project-specific database in the global ctx store, scans all files, extracts symbols (functions, classes, structs), maps dependencies, and analyzes git history for decisions.",
     ProjectPathSchema.shape,
     async ({ project_path }) => {
         const { output } = runCtx("init", project_path, true);
