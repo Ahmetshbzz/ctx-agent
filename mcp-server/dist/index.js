@@ -101,6 +101,57 @@ function compactParagraph(text, maxLen = 260) {
         return "";
     return cleaned.length > maxLen ? `${cleaned.slice(0, maxLen - 3)}...` : cleaned;
 }
+function stripMarkdownInline(text) {
+    return text
+        .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/[*_~]/g, " ");
+}
+function isBadPurposeCandidate(rawLine, cleanedLine) {
+    const raw = rawLine.trim();
+    const cleaned = cleanedLine.trim();
+    if (!raw || !cleaned)
+        return true;
+    const lowerRaw = raw.toLowerCase();
+    const lowerClean = cleaned.toLowerCase();
+    if (raw.startsWith("#"))
+        return true;
+    if (raw.startsWith("!["))
+        return true;
+    if (lowerRaw.includes("img.shields.io"))
+        return true;
+    if (lowerRaw.includes("shields.io"))
+        return true;
+    if (lowerClean.includes("license"))
+        return true;
+    if (lowerClean.includes("build status"))
+        return true;
+    if (lowerClean.includes("coverage"))
+        return true;
+    if (lowerClean.includes("badge"))
+        return true;
+    if (!/[a-zA-Z]/.test(cleaned))
+        return true;
+    if (cleaned.length < 40)
+        return true;
+    return false;
+}
+function extractPurposeFromReadme(readme) {
+    const lines = readme.split(/\r?\n/);
+    for (const line of lines) {
+        const stripped = stripMarkdownInline(line);
+        const cleaned = compactParagraph(stripped, 260);
+        if (!isBadPurposeCandidate(line, cleaned)) {
+            return compactParagraph(cleaned, 220);
+        }
+    }
+    const paragraphs = readme
+        .split(/\r?\n\r?\n/)
+        .map((p) => compactParagraph(stripMarkdownInline(p), 260))
+        .filter((p) => p.length >= 60 && /[a-zA-Z]/.test(p));
+    return paragraphs[0] ? compactParagraph(paragraphs[0], 220) : "";
+}
 function detectTopModules(projectPath) {
     try {
         return readdirSync(projectPath, { withFileTypes: true })
@@ -131,11 +182,7 @@ function buildProjectOverview(projectPath) {
         .join("\n");
     const combinedLower = docsCombined.toLowerCase();
     const readme = safeRead(join(projectPath, "README.md")) || safeRead(join(projectPath, "readme.md"));
-    const readmeLine = readme
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .find((l) => l && !l.startsWith("#") && l.length > 25) || "";
-    const purposeLine = compactParagraph(readmeLine, 220);
+    const purposeLine = extractPurposeFromReadme(readme);
     const modules = detectTopModules(projectPath);
     const hasApps = existsSync(join(projectPath, "apps"));
     const hasCore = existsSync(join(projectPath, "apps/core"));
