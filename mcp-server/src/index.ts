@@ -4,8 +4,10 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { execFileSync, execSync } from "node:child_process";
 import { resolve, dirname, join } from "node:path";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+import { homedir } from "node:os";
 import { z } from "zod";
 
 // ── Locate ctx binary ──────────────────────────────────────────────
@@ -103,6 +105,74 @@ function safeRead(filePath: string, maxChars = 10_000): string {
     } catch {
         return "";
     }
+}
+
+interface ActivityEntry {
+    ts: string;
+    tool: string;
+    summary: string;
+}
+
+function activityFilePath(projectPath: string): string {
+    const canonical = resolve(projectPath);
+    const key = createHash("sha256").update(canonical).digest("hex");
+    const dir = join(homedir(), ".ctx-agent", "activity");
+    mkdirSync(dir, { recursive: true });
+    return join(dir, `${key}.jsonl`);
+}
+
+function recordActivity(projectPath: string, tool: string, summary: string): void {
+    try {
+        const entry: ActivityEntry = {
+            ts: new Date().toISOString(),
+            tool,
+            summary,
+        };
+        appendFileSync(activityFilePath(projectPath), `${JSON.stringify(entry)}\n`, "utf-8");
+    } catch {
+        // best-effort logging
+    }
+}
+
+function recentActivity(projectPath: string, count = 5): ActivityEntry[] {
+    try {
+        const file = activityFilePath(projectPath);
+        if (!existsSync(file)) return [];
+        const lines = readFileSync(file, "utf-8")
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter(Boolean);
+        const parsed: ActivityEntry[] = lines
+            .map((l) => {
+                try {
+                    return JSON.parse(l) as ActivityEntry;
+                } catch {
+                    return null;
+                }
+            })
+            .filter((v): v is ActivityEntry => Boolean(v));
+        return parsed.slice(-count);
+    } catch {
+        return [];
+    }
+}
+
+function withRecentActivity(
+    projectPath: string,
+    baseText: string,
+    tool: string,
+    summary: string
+): string {
+    recordActivity(projectPath, tool, summary);
+    const recents = recentActivity(projectPath, 5);
+    if (recents.length === 0) return baseText;
+    const lines = [
+        "",
+        "",
+        "Recent agent activity (last 5):",
+        ...recents.map((a) => `- ${a.ts} | ${a.tool} | ${a.summary}`),
+    ];
+    return `${baseText}${lines.join("\n")}`;
 }
 
 function compactParagraph(text: string, maxLen = 260): string {
@@ -432,7 +502,8 @@ server.tool(
     ProjectPathSchema.shape,
     async ({ project_path }) => {
         const { output } = runCtxArgv(["init"], project_path, true);
-        return { content: [{ type: "text" as const, text: output }] };
+        const text = withRecentActivity(project_path, output, "ctx_init", "initialize or re-scan project index");
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
@@ -473,7 +544,13 @@ server.tool(
             "",
             ...guardLines,
         ].join("\n");
-        return { content: [{ type: "text" as const, text: `${output}${suffix}` }] };
+        const text = withRecentActivity(
+            project_path,
+            `${output}${suffix}`,
+            "ctx_status",
+            "fetch project status dashboard"
+        );
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
@@ -485,7 +562,8 @@ server.tool(
     ProjectPathSchema.shape,
     async ({ project_path }) => {
         const { output } = runCtxArgv(["map"], project_path);
-        return { content: [{ type: "text" as const, text: output }] };
+        const text = withRecentActivity(project_path, output, "ctx_map", "render codebase map");
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
@@ -497,7 +575,8 @@ server.tool(
     ProjectPathSchema.shape,
     async ({ project_path }) => {
         const { output } = runCtxArgv(["scan"], project_path);
-        return { content: [{ type: "text" as const, text: output }] };
+        const text = withRecentActivity(project_path, output, "ctx_scan", "incremental re-scan");
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
@@ -517,15 +596,27 @@ server.tool(
     async ({ project_path, query }) => {
         const { output } = runCtxArgv(["query", query], project_path);
         if (!output.includes("No results found.")) {
-            return { content: [{ type: "text" as const, text: output }] };
+            const text = withRecentActivity(
+                project_path,
+                output,
+                "ctx_query",
+                `symbol query: ${query}`
+            );
+            return { content: [{ type: "text" as const, text }] };
         }
         const fallback = runTextSearch(project_path, query, 60);
-        const text = [
+        const merged = [
             output,
             "",
             "Text search fallback (ctx-agent built-in grep):",
             fallback,
         ].join("\n");
+        const text = withRecentActivity(
+            project_path,
+            merged,
+            "ctx_query",
+            `symbol query with fallback: ${query}`
+        );
         return { content: [{ type: "text" as const, text }] };
     }
 );
@@ -543,7 +634,13 @@ server.tool(
     },
     async ({ project_path, file_path }) => {
         const { output } = runCtxArgv(["blast-radius", file_path], project_path);
-        return { content: [{ type: "text" as const, text: output }] };
+        const text = withRecentActivity(
+            project_path,
+            output,
+            "ctx_blast_radius",
+            `blast radius for ${file_path}`
+        );
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
@@ -555,7 +652,8 @@ server.tool(
     ProjectPathSchema.shape,
     async ({ project_path }) => {
         const { output } = runCtxArgv(["decisions"], project_path);
-        return { content: [{ type: "text" as const, text: output }] };
+        const text = withRecentActivity(project_path, output, "ctx_decisions", "list decision history");
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
@@ -575,7 +673,13 @@ server.tool(
     async ({ project_path, note, file }) => {
         const args = file ? ["learn", note, "--file", file] : ["learn", note];
         const { output } = runCtxArgv(args, project_path);
-        return { content: [{ type: "text" as const, text: output }] };
+        const text = withRecentActivity(
+            project_path,
+            output,
+            "ctx_learn",
+            file ? `store knowledge note for ${file}` : "store knowledge note"
+        );
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
@@ -587,7 +691,8 @@ server.tool(
     ProjectPathSchema.shape,
     async ({ project_path }) => {
         const { output } = runCtxArgv(["warnings"], project_path);
-        return { content: [{ type: "text" as const, text: output }] };
+        const text = withRecentActivity(project_path, output, "ctx_warnings", "list codebase warnings");
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
@@ -618,7 +723,13 @@ server.tool(
             `Sources: ${overview.sources.join(", ") || "none detected"}`,
             `Knowledge note: ${saved}`,
         ].join("\n");
-        return { content: [{ type: "text" as const, text }] };
+        const finalText = withRecentActivity(
+            project_path,
+            text,
+            "ctx_overview",
+            `generate project overview (save_note=${save_note !== false})`
+        );
+        return { content: [{ type: "text" as const, text: finalText }] };
     }
 );
 
@@ -648,7 +759,13 @@ server.tool(
             lines.push("Missing controls:");
             guard.missingControls.forEach((m) => lines.push(`- ${m}`));
         }
-        return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+        const text = withRecentActivity(
+            project_path,
+            lines.join("\n"),
+            "ctx_guard",
+            "run paranoid security guard checks"
+        );
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
@@ -670,7 +787,13 @@ server.tool(
     },
     async ({ project_path, pattern, max_results }) => {
         const output = runTextSearch(project_path, pattern, max_results ?? 60);
-        return { content: [{ type: "text" as const, text: output }] };
+        const text = withRecentActivity(
+            project_path,
+            output,
+            "ctx_grep",
+            `text search: ${pattern}`
+        );
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
