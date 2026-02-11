@@ -13,6 +13,7 @@ use crate::cli::Commands;
 
 mod blast_radius;
 mod decisions;
+mod grep;
 mod init;
 mod learn;
 mod map;
@@ -31,6 +32,10 @@ pub fn run(command: Commands, root: &Path, json_mode: bool) -> Result<()> {
         Commands::Map => map::cmd_map(root, json_mode)?,
         Commands::Status => status::cmd_status(root, json_mode)?,
         Commands::Query { term } => query::cmd_query(root, &term, json_mode)?,
+        Commands::Grep {
+            pattern,
+            max_results,
+        } => grep::cmd_grep(root, &pattern, max_results, json_mode)?,
         Commands::BlastRadius { path } => blast_radius::cmd_blast_radius(root, &path, json_mode)?,
         Commands::Decisions => decisions::cmd_decisions(root, json_mode)?,
         Commands::Learn { note, file } => {

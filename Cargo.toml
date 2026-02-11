@@ -45,6 +45,9 @@ colored = "2"
 # Error handling
 anyhow = "1"
 blake3 = "1"
+regex = "1"
+grep-searcher = "0.1"
+grep-regex = "0.1"
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }

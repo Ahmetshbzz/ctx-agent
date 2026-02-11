@@ -41,6 +41,16 @@ pub enum Commands {
         term: String,
     },
 
+    /// Search raw text in repository files (ripgrep-like, built-in)
+    Grep {
+        /// Text or regex pattern
+        pattern: String,
+
+        /// Maximum results to return
+        #[arg(short, long, default_value_t = 60)]
+        max_results: usize,
+    },
+
     /// Show blast radius of changing a file
     BlastRadius {
         /// File path (relative to project root)

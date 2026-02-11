@@ -290,78 +290,13 @@ function runGit(projectPath: string, args: string[]): string {
     }
 }
 
-function hasBinary(name: string): boolean {
-    try {
-        execSync(`command -v ${name}`, { stdio: "ignore" });
-        return true;
-    } catch {
-        return false;
-    }
-}
-
 function runTextSearch(projectPath: string, pattern: string, maxResults = 60): string {
     const safeMax = Math.min(Math.max(maxResults, 1), 200);
-    const rgArgs = [
-        "-n",
-        "-S",
-        "--no-heading",
-        "--max-count",
-        String(safeMax),
-        "--glob",
-        "!**/node_modules/**",
-        "--glob",
-        "!**/dist/**",
-        "--glob",
-        "!**/target/**",
-        "--glob",
-        "!**/.git/**",
-        pattern,
-        ".",
-    ];
-
-    try {
-        if (hasBinary("rg")) {
-            const out = execFileSync("rg", rgArgs, {
-                cwd: projectPath,
-                encoding: "utf-8",
-                timeout: 20_000,
-                maxBuffer: 10 * 1024 * 1024,
-            }).trim();
-            return out || "No text matches found.";
-        }
-    } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (!message.includes("status 1")) {
-            return `Text search error: ${message}`;
-        }
-        return "No text matches found.";
-    }
-
-    try {
-        const out = execFileSync(
-            "grep",
-            [
-                "-RIn",
-                "--exclude-dir=node_modules",
-                "--exclude-dir=dist",
-                "--exclude-dir=target",
-                "--exclude-dir=.git",
-                "-m",
-                String(safeMax),
-                pattern,
-                ".",
-            ],
-            {
-                cwd: projectPath,
-                encoding: "utf-8",
-                timeout: 20_000,
-                maxBuffer: 10 * 1024 * 1024,
-            }
-        ).trim();
-        return out || "No text matches found.";
-    } catch {
-        return "No text matches found.";
-    }
+    const { output } = runCtxArgv(
+        ["grep", pattern, "--max-results", String(safeMax)],
+        projectPath
+    );
+    return output || "No text matches found.";
 }
 
 function getTouchedFiles(projectPath: string): string[] {
@@ -388,25 +323,16 @@ function isSensitivePath(filePath: string): boolean {
 }
 
 function hasRepoPattern(projectPath: string, pattern: string): boolean {
+    const safePattern = pattern.trim();
+    if (!safePattern) return false;
+    const { success, output } = runCtxArgv(
+        ["grep", safePattern, "--max-results", "1", "--json"],
+        projectPath
+    );
+    if (!success) return false;
     try {
-        execFileSync(
-            "rg",
-            [
-                "--no-messages",
-                "--glob",
-                "!**/node_modules/**",
-                "--glob",
-                "!**/dist/**",
-                "--glob",
-                "!**/target/**",
-                "-n",
-                "-S",
-                pattern,
-                projectPath,
-            ],
-            { encoding: "utf-8", timeout: 15_000, maxBuffer: 5 * 1024 * 1024 }
-        );
-        return true;
+        const parsed = JSON.parse(output) as { count?: number };
+        return (parsed.count ?? 0) > 0;
     } catch {
         return false;
     }
@@ -597,7 +523,7 @@ server.tool(
         const text = [
             output,
             "",
-            "Text search fallback (ripgrep/grep):",
+            "Text search fallback (ctx-agent built-in grep):",
             fallback,
         ].join("\n");
         return { content: [{ type: "text" as const, text }] };
@@ -730,7 +656,7 @@ server.tool(
 
 server.tool(
     "ctx_grep",
-    "Fast text search across the repository using ripgrep (fallback: grep). Useful when a symbol query misses strings, routes, handlers, or comments.",
+    "Fast text search across the repository using ctx-agent built-in grep (ripgrep-style in Rust). Useful when a symbol query misses strings, routes, handlers, or comments.",
     {
         ...ProjectPathSchema.shape,
         pattern: z.string().describe("Text or regex pattern to search"),
