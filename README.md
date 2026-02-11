@@ -288,7 +288,8 @@ Add to your MCP config (e.g. `mcp_config.json`):
 | `ctx_status` | Project dashboard |
 | `ctx_map` | Codebase structure map |
 | `ctx_scan` | Incremental re-scan |
-| `ctx_query` | Full-text symbol search |
+| `ctx_query` | Full-text symbol search (auto text-search fallback when empty) |
+| `ctx_grep` | Ripgrep-powered repository text search (fallback: grep) |
 | `ctx_blast_radius` | File impact analysis |
 | `ctx_decisions` | Decision history |
 | `ctx_learn` | Store knowledge notes |
@@ -300,6 +301,7 @@ Add to your MCP config (e.g. `mcp_config.json`):
 > **Auto overview bootstrap:** `ctx_status` now auto-creates a first project overview note when `knowledge_notes = 0`.
 > **Watch behavior:** agent commands auto-start per-project background watch by default (disable with `CTX_AGENT_DISABLE_AUTO_WATCH=1`).
 > **Paranoid mode:** Enabled by default in MCP (`CTX_PARANOID=1`). `ctx_status` includes a security guard section and can report `BLOCK` for sensitive changes missing critical controls.
+> **Search fallback:** `ctx_query` automatically falls back to repository text search (ripgrep/grep) when symbol search returns no results.
 
 ## Architecture
 

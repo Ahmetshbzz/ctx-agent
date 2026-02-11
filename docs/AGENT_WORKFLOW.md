@@ -19,6 +19,8 @@ Use `ctx-agent` as the first context layer so each agent session starts with pro
 
 3. Target discovery
 - `ctx_query "<feature-or-bug-keyword>"`
+- If symbol search is empty, `ctx_query` auto-falls back to text search
+- Use `ctx_grep` directly for route/path/string-heavy searches
 - Run multiple focused terms instead of a single broad query
 
 4. Editing loop

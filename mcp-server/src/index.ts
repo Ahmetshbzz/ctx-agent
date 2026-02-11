@@ -290,6 +290,80 @@ function runGit(projectPath: string, args: string[]): string {
     }
 }
 
+function hasBinary(name: string): boolean {
+    try {
+        execSync(`command -v ${name}`, { stdio: "ignore" });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function runTextSearch(projectPath: string, pattern: string, maxResults = 60): string {
+    const safeMax = Math.min(Math.max(maxResults, 1), 200);
+    const rgArgs = [
+        "-n",
+        "-S",
+        "--no-heading",
+        "--max-count",
+        String(safeMax),
+        "--glob",
+        "!**/node_modules/**",
+        "--glob",
+        "!**/dist/**",
+        "--glob",
+        "!**/target/**",
+        "--glob",
+        "!**/.git/**",
+        pattern,
+        ".",
+    ];
+
+    try {
+        if (hasBinary("rg")) {
+            const out = execFileSync("rg", rgArgs, {
+                cwd: projectPath,
+                encoding: "utf-8",
+                timeout: 20_000,
+                maxBuffer: 10 * 1024 * 1024,
+            }).trim();
+            return out || "No text matches found.";
+        }
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!message.includes("status 1")) {
+            return `Text search error: ${message}`;
+        }
+        return "No text matches found.";
+    }
+
+    try {
+        const out = execFileSync(
+            "grep",
+            [
+                "-RIn",
+                "--exclude-dir=node_modules",
+                "--exclude-dir=dist",
+                "--exclude-dir=target",
+                "--exclude-dir=.git",
+                "-m",
+                String(safeMax),
+                pattern,
+                ".",
+            ],
+            {
+                cwd: projectPath,
+                encoding: "utf-8",
+                timeout: 20_000,
+                maxBuffer: 10 * 1024 * 1024,
+            }
+        ).trim();
+        return out || "No text matches found.";
+    } catch {
+        return "No text matches found.";
+    }
+}
+
 function getTouchedFiles(projectPath: string): string[] {
     const outputs = [
         runGit(projectPath, ["diff", "--name-only"]),
@@ -516,7 +590,17 @@ server.tool(
     },
     async ({ project_path, query }) => {
         const { output } = runCtxArgv(["query", query], project_path);
-        return { content: [{ type: "text" as const, text: output }] };
+        if (!output.includes("No results found.")) {
+            return { content: [{ type: "text" as const, text: output }] };
+        }
+        const fallback = runTextSearch(project_path, query, 60);
+        const text = [
+            output,
+            "",
+            "Text search fallback (ripgrep/grep):",
+            fallback,
+        ].join("\n");
+        return { content: [{ type: "text" as const, text }] };
     }
 );
 
@@ -639,6 +723,28 @@ server.tool(
             guard.missingControls.forEach((m) => lines.push(`- ${m}`));
         }
         return { content: [{ type: "text" as const, text: lines.join("\n") }] };
+    }
+);
+
+// ── Tool: ctx_grep ──────────────────────────────────────────────────
+
+server.tool(
+    "ctx_grep",
+    "Fast text search across the repository using ripgrep (fallback: grep). Useful when a symbol query misses strings, routes, handlers, or comments.",
+    {
+        ...ProjectPathSchema.shape,
+        pattern: z.string().describe("Text or regex pattern to search"),
+        max_results: z
+            .number()
+            .int()
+            .min(1)
+            .max(200)
+            .optional()
+            .describe("Maximum number of matches to return (default: 60)"),
+    },
+    async ({ project_path, pattern, max_results }) => {
+        const output = runTextSearch(project_path, pattern, max_results ?? 60);
+        return { content: [{ type: "text" as const, text: output }] };
     }
 );
 

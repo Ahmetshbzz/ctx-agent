@@ -258,6 +258,75 @@ function runGit(projectPath, args) {
         return "";
     }
 }
+function hasBinary(name) {
+    try {
+        execSync(`command -v ${name}`, { stdio: "ignore" });
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+function runTextSearch(projectPath, pattern, maxResults = 60) {
+    const safeMax = Math.min(Math.max(maxResults, 1), 200);
+    const rgArgs = [
+        "-n",
+        "-S",
+        "--no-heading",
+        "--max-count",
+        String(safeMax),
+        "--glob",
+        "!**/node_modules/**",
+        "--glob",
+        "!**/dist/**",
+        "--glob",
+        "!**/target/**",
+        "--glob",
+        "!**/.git/**",
+        pattern,
+        ".",
+    ];
+    try {
+        if (hasBinary("rg")) {
+            const out = execFileSync("rg", rgArgs, {
+                cwd: projectPath,
+                encoding: "utf-8",
+                timeout: 20_000,
+                maxBuffer: 10 * 1024 * 1024,
+            }).trim();
+            return out || "No text matches found.";
+        }
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!message.includes("status 1")) {
+            return `Text search error: ${message}`;
+        }
+        return "No text matches found.";
+    }
+    try {
+        const out = execFileSync("grep", [
+            "-RIn",
+            "--exclude-dir=node_modules",
+            "--exclude-dir=dist",
+            "--exclude-dir=target",
+            "--exclude-dir=.git",
+            "-m",
+            String(safeMax),
+            pattern,
+            ".",
+        ], {
+            cwd: projectPath,
+            encoding: "utf-8",
+            timeout: 20_000,
+            maxBuffer: 10 * 1024 * 1024,
+        }).trim();
+        return out || "No text matches found.";
+    }
+    catch {
+        return "No text matches found.";
+    }
+}
 function getTouchedFiles(projectPath) {
     const outputs = [
         runGit(projectPath, ["diff", "--name-only"]),
@@ -431,7 +500,17 @@ server.tool("ctx_query", "Full-text search across all symbols (functions, classe
         .describe("Search query — supports partial matches (e.g. 'parse', 'Database', 'init')"),
 }, async ({ project_path, query }) => {
     const { output } = runCtxArgv(["query", query], project_path);
-    return { content: [{ type: "text", text: output }] };
+    if (!output.includes("No results found.")) {
+        return { content: [{ type: "text", text: output }] };
+    }
+    const fallback = runTextSearch(project_path, query, 60);
+    const text = [
+        output,
+        "",
+        "Text search fallback (ripgrep/grep):",
+        fallback,
+    ].join("\n");
+    return { content: [{ type: "text", text }] };
 });
 // ── Tool: ctx_blast_radius ──────────────────────────────────────────
 server.tool("ctx_blast_radius", "Analyze the blast radius of changing a specific file. Shows: what the file imports, what files depend on it, and the full transitive impact graph. Includes a risk assessment (low/medium/high/critical).", {
@@ -511,6 +590,21 @@ server.tool("ctx_guard", "Run paranoid security guard checks. If auth/session/to
         guard.missingControls.forEach((m) => lines.push(`- ${m}`));
     }
     return { content: [{ type: "text", text: lines.join("\n") }] };
+});
+// ── Tool: ctx_grep ──────────────────────────────────────────────────
+server.tool("ctx_grep", "Fast text search across the repository using ripgrep (fallback: grep). Useful when a symbol query misses strings, routes, handlers, or comments.", {
+    ...ProjectPathSchema.shape,
+    pattern: z.string().describe("Text or regex pattern to search"),
+    max_results: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe("Maximum number of matches to return (default: 60)"),
+}, async ({ project_path, pattern, max_results }) => {
+    const output = runTextSearch(project_path, pattern, max_results ?? 60);
+    return { content: [{ type: "text", text: output }] };
 });
 // ── Start server ────────────────────────────────────────────────────
 async function main() {
