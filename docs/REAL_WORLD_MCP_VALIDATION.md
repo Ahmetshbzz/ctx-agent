@@ -1,7 +1,6 @@
 # Real-World MCP Validation
 
-
-Project under test: `/path/to/project`
+Project under test: a production polyglot monorepo (TypeScript, Go, Swift)
 Validation mode: MCP tools only (`ctx_init`, `ctx_status`, `ctx_scan`, `ctx_query`, `ctx_blast_radius`, `ctx_warnings`, `ctx_decisions`)
 
 ## Summary

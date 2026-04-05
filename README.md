@@ -138,10 +138,9 @@ ctx-agent status --json
 ctx-agent query "parse" --json
 ```
 
-## Real-World MCP Test (production polyglot monorepo)
+## Real-World MCP Test
 
-The following validation was executed on **** using MCP tools only, against:
-`/path/to/project`
+The following validation was executed using MCP tools only, against a production polyglot monorepo:
 
 - Files: 483
 - Lines: 77,235
