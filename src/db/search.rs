@@ -1,4 +1,6 @@
-use super::*;
+use anyhow::Result;
+
+use super::core::Database;
 
 impl Database {
     // =================================================================

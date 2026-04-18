@@ -19,6 +19,13 @@ pub(super) fn cmd_watch_status(root: &Path, json_mode: bool) -> Result<()> {
         if let Some(reason) = status.last_scan_reason {
             println!("  Last reason: {}", reason.cyan());
         }
+        println!("  Dirty count: {}", status.dirty_count.to_string().cyan());
+        if !status.recent_paths.is_empty() {
+            println!("  Recent paths:");
+            for path in status.recent_paths.iter().take(5) {
+                println!("    - {}", path.dimmed());
+            }
+        }
         if let Some(error) = status.last_error {
             println!("  Last error: {}", error.red());
         }

@@ -105,6 +105,10 @@ pub(super) fn cmd_status(root: &Path, json_mode: bool) -> Result<()> {
         if let Some(reason) = watch.last_scan_reason.clone() {
             println!("    Last reason: {}", reason.cyan());
         }
+        println!("    Dirty count: {}", watch.dirty_count.to_string().cyan());
+        if !watch.recent_paths.is_empty() {
+            println!("    Recent paths: {}", watch.recent_paths.join(", ").dimmed());
+        }
         if let Some(error) = watch.last_error.clone() {
             println!("    Last error: {}", error.red());
         }

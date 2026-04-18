@@ -15,6 +15,8 @@ pub struct WatchState {
     pub last_scan_at_ms: Option<u128>,
     pub last_scan_reason: Option<String>,
     pub last_error: Option<String>,
+    pub dirty_count: usize,
+    pub recent_paths: Vec<String>,
 }
 
 pub fn project_key(project_path: &Path) -> String {

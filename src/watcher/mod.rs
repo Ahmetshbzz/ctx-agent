@@ -26,6 +26,8 @@ pub struct WatchStatus {
     pub last_scan_reason: Option<String>,
     pub last_error: Option<String>,
     pub status: Option<String>,
+    pub dirty_count: usize,
+    pub recent_paths: Vec<String>,
 }
 
 /// Start watching for file changes and re-analyze incrementally
@@ -49,6 +51,8 @@ pub fn watch_project(project_root: &Path) -> Result<()> {
         last_scan_at_ms: Some(started_at_ms),
         last_scan_reason: Some("watch-start".to_string()),
         last_error: None,
+        dirty_count: 0,
+        recent_paths: Vec::new(),
     };
     write_state(&project_root, &watch_state)?;
 
@@ -88,6 +92,13 @@ pub fn watch_project(project_root: &Path) -> Result<()> {
                     EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
                         watch_state.last_event_at_ms = Some(now_ms());
                         watch_state.last_scan_reason = Some("filesystem-event".to_string());
+                        watch_state.recent_paths = event
+                            .paths
+                            .iter()
+                            .map(|path| path.strip_prefix(&project_root).unwrap_or(path).to_string_lossy().to_string())
+                            .take(5)
+                            .collect();
+                        watch_state.dirty_count = watch_state.recent_paths.len();
                         let _ = write_state(&project_root, &watch_state);
 
                         // Debounce: wait at least 1 second between re-analyses
@@ -98,6 +109,8 @@ pub fn watch_project(project_root: &Path) -> Result<()> {
                                     watch_state.last_scan_at_ms = Some(now_ms());
                                     watch_state.status = "watching".to_string();
                                     watch_state.last_error = None;
+                                    watch_state.dirty_count = 0;
+                                    watch_state.recent_paths.clear();
                                     let _ = write_state(&project_root, &watch_state);
                                     println!(
                                         "  OK  Updated: {} files, {} symbols",
@@ -152,6 +165,8 @@ pub fn watch_status(project_root: &Path) -> WatchStatus {
         last_scan_reason: state.as_ref().and_then(|value| value.last_scan_reason.clone()),
         last_error: state.as_ref().and_then(|value| value.last_error.clone()),
         status: state.as_ref().map(|value| value.status.clone()),
+        dirty_count: state.as_ref().map(|value| value.dirty_count).unwrap_or(0),
+        recent_paths: state.as_ref().map(|value| value.recent_paths.clone()).unwrap_or_default(),
     }
 }
 

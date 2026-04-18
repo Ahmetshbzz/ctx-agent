@@ -1,6 +1,8 @@
-use super::*;
+use anyhow::Result;
 use std::collections::HashSet;
 use std::path::Path;
+
+use super::core::Database;
 
 impl Database {
     // =================================================================

@@ -17,7 +17,7 @@ pub fn execute_blast_radius(db: &Database, file_path: &str) -> Result<()> {
     let deps = db
         .get_dependencies_of(file_id)?
         .into_iter()
-        .fold(Vec::<(Option<i64>, String)>::new(), |mut acc, item| {
+        .fold(Vec::<(Option<i64>, String)>::new(), |mut acc: Vec<(Option<i64>, String)>, item| {
             if !acc.iter().any(|existing| existing == &item) {
                 acc.push(item);
             }
@@ -26,7 +26,7 @@ pub fn execute_blast_radius(db: &Database, file_path: &str) -> Result<()> {
     let dependents = db
         .get_dependents(file_id)?
         .into_iter()
-        .fold(Vec::<(i64, String)>::new(), |mut acc, item| {
+        .fold(Vec::<(i64, String)>::new(), |mut acc: Vec<(i64, String)>, item| {
             if !acc.iter().any(|existing| existing == &item) {
                 acc.push(item);
             }
