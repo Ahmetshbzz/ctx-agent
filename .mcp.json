@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ctx": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/Users/ahmet/Desktop/dev/ctx-agent/mcp-server/dist/index.js"
+      ],
+      "env": {}
+    }
+  }
+}

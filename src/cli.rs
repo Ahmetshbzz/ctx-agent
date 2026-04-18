@@ -75,4 +75,10 @@ pub enum Commands {
 
     /// Watch for file changes and re-analyze
     Watch,
+
+    /// Ensure project is initialized and background watch is running
+    EnsureWatch,
+
+    /// Show background watcher health and last activity
+    WatchStatus,
 }

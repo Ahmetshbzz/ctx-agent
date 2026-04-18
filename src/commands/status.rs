@@ -17,6 +17,8 @@ pub(super) fn cmd_status(root: &Path, json_mode: bool) -> Result<()> {
     let decisions = db.get_decisions()?;
     let knowledge = db.get_knowledge()?;
 
+    let watch = watcher::watch_status(root);
+
     if json_mode {
         let health = db.get_file_health()?;
         let fragile_count = health.iter().filter(|h| h.is_fragile).count();
@@ -47,6 +49,7 @@ pub(super) fn cmd_status(root: &Path, json_mode: bool) -> Result<()> {
                 "languages": langs,
                 "fragile_files": fragile_count,
                 "dead_files": dead_count,
+                "watch": watch,
             })
         );
     } else {
@@ -85,6 +88,27 @@ pub(super) fn cmd_status(root: &Path, json_mode: bool) -> Result<()> {
         let fragile: Vec<_> = health.iter().filter(|h| h.is_fragile).collect();
         let dead: Vec<_> = health.iter().filter(|h| h.is_dead).collect();
 
+        println!("\n  {}", "Watch:".white().bold());
+        println!(
+            "    Running: {}",
+            if watch.running { "yes".green().to_string() } else { "no".red().to_string() }
+        );
+        if let Some(pid) = watch.pid {
+            println!("    PID: {}", pid.to_string().cyan());
+        }
+        if let Some(last_scan) = watch.last_scan_at_ms {
+            println!("    Last scan at ms: {}", last_scan.to_string().cyan());
+        }
+        if let Some(last_event) = watch.last_event_at_ms {
+            println!("    Last event at ms: {}", last_event.to_string().cyan());
+        }
+        if let Some(reason) = watch.last_scan_reason.clone() {
+            println!("    Last reason: {}", reason.cyan());
+        }
+        if let Some(error) = watch.last_error.clone() {
+            println!("    Last error: {}", error.red());
+        }
+
         if !fragile.is_empty() || !dead.is_empty() {
             println!("\n  {}", "Health:".white().bold());
             if !fragile.is_empty() {
@@ -96,7 +120,7 @@ pub(super) fn cmd_status(root: &Path, json_mode: bool) -> Result<()> {
             }
             if !dead.is_empty() {
                 println!(
-                    "    {} {} potentially dead files (no commits, no dependents)",
+                    "    {} {} potentially dead files (no commits, symbols, or dependencies)",
                     "WARN".dimmed(),
                     dead.len()
                 );

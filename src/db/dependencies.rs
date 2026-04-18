@@ -64,9 +64,9 @@ impl Database {
     /// Get files that depend on the given file
     pub fn get_dependents(&self, file_id: i64) -> Result<Vec<(i64, String)>> {
         let mut stmt = self.conn.prepare(
-            "SELECT f.id, f.path FROM dependencies d
+            "SELECT DISTINCT f.id, f.path FROM dependencies d
              JOIN files f ON f.id = d.from_file_id
-             WHERE d.to_file_id = ?1",
+             WHERE d.to_file_id = ?1 AND f.id != ?1",
         )?;
         let rows = stmt.query_map([file_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
         Ok(rows.filter_map(|r| r.ok()).collect())
@@ -114,33 +114,32 @@ fn dependency_path_candidates(from_file: &str, raw_target: &str) -> Vec<String> 
     if let Some(rest) = target.strip_prefix("crate::") {
         let rel = rest.replace("::", "/");
         add_module_candidates(&mut candidates, &mut seen, format!("src/{rel}"));
+        add_parent_module_candidates(&mut candidates, &mut seen, format!("src/{rel}"));
     } else if let Some(rest) = target.strip_prefix("self::") {
         let rel = rest.replace("::", "/");
-        add_module_candidates(
-            &mut candidates,
-            &mut seen,
-            from_dir.join(rel).to_string_lossy().to_string(),
-        );
+        let joined = from_dir.join(rel).to_string_lossy().to_string();
+        add_module_candidates(&mut candidates, &mut seen, joined.clone());
+        add_parent_module_candidates(&mut candidates, &mut seen, joined);
     } else if let Some(rest) = target.strip_prefix("super::") {
         let rel = rest.replace("::", "/");
         let parent = from_dir.parent().unwrap_or_else(|| Path::new(""));
-        add_module_candidates(
-            &mut candidates,
-            &mut seen,
-            parent.join(rel).to_string_lossy().to_string(),
-        );
+        let joined = parent.join(rel).to_string_lossy().to_string();
+        add_module_candidates(&mut candidates, &mut seen, joined.clone());
+        add_parent_module_candidates(&mut candidates, &mut seen, joined);
     } else {
-        add_module_candidates(
-            &mut candidates,
-            &mut seen,
-            from_dir.join(&target_slash).to_string_lossy().to_string(),
-        );
-        add_module_candidates(&mut candidates, &mut seen, format!("src/{target_slash}"));
+        let local_joined = from_dir.join(&target_slash).to_string_lossy().to_string();
+        add_module_candidates(&mut candidates, &mut seen, local_joined.clone());
+        add_parent_module_candidates(&mut candidates, &mut seen, local_joined);
+
+        let src_joined = format!("src/{target_slash}");
+        add_module_candidates(&mut candidates, &mut seen, src_joined.clone());
+        add_parent_module_candidates(&mut candidates, &mut seen, src_joined);
     }
 
     add_candidate(&mut candidates, &mut seen, target.clone());
     add_candidate(&mut candidates, &mut seen, target_slash.clone());
-    add_module_candidates(&mut candidates, &mut seen, target_slash);
+    add_module_candidates(&mut candidates, &mut seen, target_slash.clone());
+    add_parent_module_candidates(&mut candidates, &mut seen, target_slash);
 
     candidates
 }
@@ -181,6 +180,13 @@ fn add_module_candidates(candidates: &mut Vec<String>, seen: &mut HashSet<String
     ] {
         add_candidate(candidates, seen, format!("{base}{suffix}"));
     }
+}
+
+fn add_parent_module_candidates(candidates: &mut Vec<String>, seen: &mut HashSet<String>, base: String) {
+    let Some((parent, _)) = base.rsplit_once('/') else {
+        return;
+    };
+    add_module_candidates(candidates, seen, parent.to_string());
 }
 
 fn normalize_import_target(raw_target: &str) -> Option<String> {
@@ -255,5 +261,16 @@ mod tests {
         assert!(self_candidates
             .iter()
             .any(|c| c == "src/analyzer/parser/mod.rs"));
+    }
+
+    #[test]
+    fn resolve_candidates_include_parent_module_for_symbol_imports() {
+        let candidates = dependency_path_candidates("src/commands/status.rs", "crate::watcher::watch_status");
+        assert!(candidates.iter().any(|c| c == "src/watcher/mod.rs"));
+
+        let local_candidates = dependency_path_candidates("src/watcher/mod.rs", "state::WatchState");
+        assert!(local_candidates
+            .iter()
+            .any(|c| c == "src/watcher/state.rs"));
     }
 }

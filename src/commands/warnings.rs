@@ -108,7 +108,7 @@ pub(super) fn cmd_warnings(root: &Path, json_mode: bool) -> Result<()> {
         }
 
         if !dead.is_empty() {
-            println!("  Potentially dead files (no git history, no dependents):");
+            println!("  Potentially dead files (no git history, symbols, or dependencies):");
             for f in dead.iter().take(10) {
                 println!(
                     "    {} {} ({})",

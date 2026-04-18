@@ -154,6 +154,8 @@ pub struct FileHealth {
     pub commit_count: i64,
     pub churn_score: f64,
     pub dependents_count: i64,
+    pub symbol_count: i64,
+    pub outgoing_dependencies_count: i64,
     pub is_fragile: bool,
     pub is_dead: bool,
 }

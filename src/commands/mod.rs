@@ -14,6 +14,7 @@ use crate::cli::Commands;
 mod blast_radius;
 mod decisions;
 mod grep;
+mod ensure_watch;
 mod init;
 mod learn;
 mod map;
@@ -22,9 +23,10 @@ mod scan;
 mod status;
 mod warnings;
 mod watch;
+mod watch_status;
 
 pub fn run(command: Commands, root: &Path, json_mode: bool) -> Result<()> {
-    let is_watch_command = matches!(&command, Commands::Watch);
+    let skip_auto_watch = matches!(&command, Commands::Watch | Commands::EnsureWatch | Commands::WatchStatus);
 
     match command {
         Commands::Init => init::cmd_init(root, json_mode)?,
@@ -43,10 +45,12 @@ pub fn run(command: Commands, root: &Path, json_mode: bool) -> Result<()> {
         }
         Commands::Warnings => warnings::cmd_warnings(root, json_mode)?,
         Commands::Watch => watch::cmd_watch(root)?,
+        Commands::EnsureWatch => ensure_watch::cmd_ensure_watch(root, json_mode)?,
+        Commands::WatchStatus => watch_status::cmd_watch_status(root, json_mode)?,
     }
 
-    // Agent-first default: keep context fresh in background unless this invocation is already `watch`.
-    if !is_watch_command {
+    // Agent-first default: keep context fresh in background unless this invocation is already `watch` or `ensure-watch`.
+    if !skip_auto_watch {
         watcher::ensure_background_watch(root).ok();
     }
 

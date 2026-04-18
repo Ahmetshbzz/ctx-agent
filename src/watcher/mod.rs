@@ -1,5 +1,6 @@
 use anyhow::Result;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
+use serde::Serialize;
 use std::fs;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -9,8 +10,48 @@ use std::time::Duration;
 use crate::analyzer;
 use crate::db::Database;
 
+pub mod state;
+use state::{now_ms, project_key, read_pid_lock, remove_state, try_acquire_pid_lock, write_state, WatchState};
+
+#[derive(Serialize)]
+pub struct WatchStatus {
+    pub project_path: String,
+    pub project_key: String,
+    pub running: bool,
+    pub pid: Option<u32>,
+    pub state_path: String,
+    pub pid_path: String,
+    pub last_event_at_ms: Option<u128>,
+    pub last_scan_at_ms: Option<u128>,
+    pub last_scan_reason: Option<String>,
+    pub last_error: Option<String>,
+    pub status: Option<String>,
+}
+
 /// Start watching for file changes and re-analyze incrementally
 pub fn watch_project(project_root: &Path) -> Result<()> {
+    let project_root = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.to_path_buf());
+    let project_root_str = project_root.to_string_lossy().to_string();
+    let project_key = project_key(&project_root);
+
+    if !try_acquire_pid_lock(&project_root)? {
+        return Ok(());
+    }
+
+    let started_at_ms = now_ms();
+    let mut watch_state = WatchState {
+        project_path: project_root_str.clone(),
+        project_key: project_key.clone(),
+        pid: std::process::id(),
+        status: "watching".to_string(),
+        started_at_ms,
+        last_event_at_ms: Some(started_at_ms),
+        last_scan_at_ms: Some(started_at_ms),
+        last_scan_reason: Some("watch-start".to_string()),
+        last_error: None,
+    };
+    write_state(&project_root, &watch_state)?;
+
     let (tx, rx) = mpsc::channel();
 
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
@@ -20,11 +61,11 @@ pub fn watch_project(project_root: &Path) -> Result<()> {
     })?;
 
     // Watch the project root (excluding .ctx and .git)
-    watcher.watch(project_root, RecursiveMode::Recursive)?;
+    watcher.watch(&project_root, RecursiveMode::Recursive)?;
 
     println!("  Watching for changes... (Ctrl+C to stop)");
 
-    let db = Database::open(project_root)?;
+    let db = Database::open(&project_root)?;
     let mut debounce_timer = std::time::Instant::now();
 
     loop {
@@ -45,17 +86,29 @@ pub fn watch_project(project_root: &Path) -> Result<()> {
 
                 match event.kind {
                     EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => {
+                        watch_state.last_event_at_ms = Some(now_ms());
+                        watch_state.last_scan_reason = Some("filesystem-event".to_string());
+                        let _ = write_state(&project_root, &watch_state);
+
                         // Debounce: wait at least 1 second between re-analyses
                         if debounce_timer.elapsed() > Duration::from_secs(1) {
                             println!("  Change detected, re-analyzing...");
-                            match analyzer::analyze_project(&db, project_root) {
+                            match analyzer::analyze_project(&db, &project_root) {
                                 Ok(result) => {
+                                    watch_state.last_scan_at_ms = Some(now_ms());
+                                    watch_state.status = "watching".to_string();
+                                    watch_state.last_error = None;
+                                    let _ = write_state(&project_root, &watch_state);
                                     println!(
                                         "  OK  Updated: {} files, {} symbols",
                                         result.analyzed_files, result.total_symbols
                                     );
                                 }
                                 Err(e) => {
+                                    watch_state.last_scan_at_ms = Some(now_ms());
+                                    watch_state.status = "error".to_string();
+                                    watch_state.last_error = Some(e.to_string());
+                                    let _ = write_state(&project_root, &watch_state);
                                     eprintln!("  ERROR  Analysis error: {}", e);
                                 }
                             }
@@ -70,7 +123,36 @@ pub fn watch_project(project_root: &Path) -> Result<()> {
         }
     }
 
+    remove_state(&project_root);
     Ok(())
+}
+
+pub fn watch_status(project_root: &Path) -> WatchStatus {
+    let project = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.to_path_buf());
+    let pid = read_pid_lock(&project);
+    let pid_running = pid
+        .map(|value| Command::new("kill").arg("-0").arg(value.to_string()).status().map(|s| s.success()).unwrap_or(false))
+        .unwrap_or(false);
+
+    let state_path = state::state_path(&project);
+    let pid_path = state::pid_path(&project);
+    let state = std::fs::read_to_string(&state_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<WatchState>(&content).ok());
+
+    WatchStatus {
+        project_path: project.to_string_lossy().to_string(),
+        project_key: project_key(&project),
+        running: pid_running,
+        pid,
+        state_path: state_path.to_string_lossy().to_string(),
+        pid_path: pid_path.to_string_lossy().to_string(),
+        last_event_at_ms: state.as_ref().and_then(|value| value.last_event_at_ms),
+        last_scan_at_ms: state.as_ref().and_then(|value| value.last_scan_at_ms),
+        last_scan_reason: state.as_ref().and_then(|value| value.last_scan_reason.clone()),
+        last_error: state.as_ref().and_then(|value| value.last_error.clone()),
+        status: state.as_ref().map(|value| value.status.clone()),
+    }
 }
 
 /// Ensure a background watcher process is running for this project.
@@ -83,7 +165,8 @@ pub fn ensure_background_watch(project_root: &Path) -> Result<()> {
     let project = std::fs::canonicalize(project_root).unwrap_or_else(|_| project_root.to_path_buf());
     let project_str = project.to_string_lossy().to_string();
 
-    if is_watch_running(&project_str) {
+    let status = watch_status(&project);
+    if status.running || is_watch_running(&project_str) {
         return Ok(());
     }
 

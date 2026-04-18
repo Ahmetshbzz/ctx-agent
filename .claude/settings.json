@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CLAUDE_PROJECT_DIR=/Users/ahmet/Desktop/dev/ctx-agent /Users/ahmet/Desktop/dev/ctx-agent/scripts/claude-ctx-watch-hook.sh",
+            "timeout": 15,
+            "statusMessage": "ctx-agent watch hazırlanıyor",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CLAUDE_PROJECT_DIR=/Users/ahmet/Desktop/dev/ctx-agent /Users/ahmet/Desktop/dev/ctx-agent/scripts/claude-ctx-watch-hook.sh",
+            "timeout": 15,
+            "statusMessage": "ctx-agent watch güncelleniyor",
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}

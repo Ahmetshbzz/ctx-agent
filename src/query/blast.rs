@@ -14,8 +14,33 @@ pub fn execute_blast_radius(db: &Database, file_path: &str) -> Result<()> {
     };
 
     // Direct dependencies
-    let deps = db.get_dependencies_of(file_id)?;
-    let dependents = db.get_dependents(file_id)?;
+    let deps = db
+        .get_dependencies_of(file_id)?
+        .into_iter()
+        .fold(Vec::<(Option<i64>, String)>::new(), |mut acc, item| {
+            if !acc.iter().any(|existing| existing == &item) {
+                acc.push(item);
+            }
+            acc
+        });
+    let dependents = db
+        .get_dependents(file_id)?
+        .into_iter()
+        .fold(Vec::<(i64, String)>::new(), |mut acc, item| {
+            if !acc.iter().any(|existing| existing == &item) {
+                acc.push(item);
+            }
+            acc
+        });
+    let sibling_modules = if let Some(parent) = file_path.rsplit_once('/') {
+        db.get_all_files()?
+            .into_iter()
+            .filter(|file| file.path != file_path && file.path.starts_with(&format!("{}/", parent.0)))
+            .map(|file| file.path)
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
 
     println!(
         "\n  {} {}\n",
@@ -49,6 +74,21 @@ pub fn execute_blast_radius(db: &Database, file_path: &str) -> Result<()> {
         println!();
     }
 
+    if !sibling_modules.is_empty() {
+        println!(
+            "  {} {} same-directory sibling modules (likely co-change surface):",
+            "≈".yellow(),
+            sibling_modules.len().to_string().cyan()
+        );
+        for path in sibling_modules.iter().take(12) {
+            println!("    {} {}", "≈".dimmed(), path);
+        }
+        if sibling_modules.len() > 12 {
+            println!("    {} ... and {} more", "≈".dimmed(), sibling_modules.len() - 12);
+        }
+        println!();
+    }
+
     // Show transitive blast radius
     let radius = graph::blast_radius(db, file_id)?;
     if !radius.is_empty() {
@@ -67,21 +107,29 @@ pub fn execute_blast_radius(db: &Database, file_path: &str) -> Result<()> {
         println!();
 
         // Risk assessment
-        let risk = if radius.len() > 20 {
+        let effective_radius = radius.len() + sibling_modules.len();
+        let risk = if effective_radius > 20 {
             "CRITICAL".red().bold()
-        } else if radius.len() > 10 {
+        } else if effective_radius > 10 {
             "HIGH".red()
-        } else if radius.len() > 5 {
+        } else if effective_radius > 5 {
             "MEDIUM".yellow()
         } else {
             "LOW".green()
         };
         println!("  Risk: {}", risk);
     } else if dependents.is_empty() {
-        println!(
-            "  {} No files depend on this file (leaf node)",
-            "OK".green()
-        );
+        if sibling_modules.is_empty() {
+            println!(
+                "  {} No files depend on this file (leaf node)",
+                "OK".green()
+            );
+        } else {
+            println!(
+                "  {} No direct import dependents found, but nearby sibling modules suggest a broader co-change surface",
+                "INFO".yellow()
+            );
+        }
     }
 
     Ok(())

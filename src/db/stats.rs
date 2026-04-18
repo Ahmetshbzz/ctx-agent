@@ -30,7 +30,9 @@ impl Database {
             "SELECT f.path, f.language, f.line_count,
                     COALESCE(fs.commit_count, 0),
                     COALESCE(fs.churn_score, 0.0),
-                    (SELECT COUNT(*) FROM dependencies d WHERE d.to_file_id = f.id)
+                    (SELECT COUNT(*) FROM dependencies d WHERE d.to_file_id = f.id),
+                    (SELECT COUNT(*) FROM symbols s WHERE s.file_id = f.id),
+                    (SELECT COUNT(*) FROM dependencies d WHERE d.from_file_id = f.id)
              FROM files f
              LEFT JOIN file_stats fs ON fs.file_id = f.id
              ORDER BY fs.churn_score DESC NULLS LAST",
@@ -39,6 +41,8 @@ impl Database {
             let churn_score: f64 = row.get(4)?;
             let commit_count: i64 = row.get(3)?;
             let dependents_count: i64 = row.get(5)?;
+            let symbol_count: i64 = row.get(6)?;
+            let outgoing_dependencies_count: i64 = row.get(7)?;
             Ok(FileHealth {
                 path: row.get(0)?,
                 language: row.get(1)?,
@@ -46,8 +50,13 @@ impl Database {
                 commit_count,
                 churn_score,
                 dependents_count,
+                symbol_count,
+                outgoing_dependencies_count,
                 is_fragile: churn_score > 0.7 && dependents_count > 3,
-                is_dead: commit_count == 0 && dependents_count == 0,
+                is_dead: commit_count == 0
+                    && dependents_count == 0
+                    && symbol_count == 0
+                    && outgoing_dependencies_count == 0,
             })
         })?;
         Ok(rows.filter_map(|r| r.ok()).collect())
