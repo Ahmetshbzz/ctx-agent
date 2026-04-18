@@ -79,7 +79,7 @@ pub(super) fn cmd_warnings(root: &Path, json_mode: bool) -> Result<()> {
         );
 
         if !fragile.is_empty() {
-            println!("  Fragile files (high churn + many dependents):");
+            println!("  Fragile files (high churn + many dependents on non-trivial files):");
             for f in &fragile {
                 println!(
                     "    {} {} — {} commits, {} dependents, churn {:.1}",

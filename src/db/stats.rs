@@ -40,6 +40,7 @@ impl Database {
         let rows = stmt.query_map([], |row| {
             let churn_score: f64 = row.get(4)?;
             let commit_count: i64 = row.get(3)?;
+            let line_count: i64 = row.get(2)?;
             let dependents_count: i64 = row.get(5)?;
             let symbol_count: i64 = row.get(6)?;
             let outgoing_dependencies_count: i64 = row.get(7)?;
@@ -52,7 +53,10 @@ impl Database {
                 dependents_count,
                 symbol_count,
                 outgoing_dependencies_count,
-                is_fragile: churn_score > 0.7 && dependents_count > 3,
+                is_fragile: commit_count >= 5
+                    && churn_score > 0.85
+                    && dependents_count > 5
+                    && line_count > 80,
                 is_dead: commit_count == 0
                     && dependents_count == 0
                     && symbol_count == 0
