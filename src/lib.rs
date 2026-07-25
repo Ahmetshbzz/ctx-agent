@@ -1,6 +1,7 @@
 pub mod analyzer;
 pub mod db;
 pub mod git;
+pub mod index;
 pub mod query;
 pub mod watcher;
 

@@ -7,8 +7,22 @@ pub(super) fn cmd_watch_status(root: &Path, json_mode: bool) -> Result<()> {
         println!("{}", json!(status));
     } else {
         println!("\n  {} — Watch Status\n", "ctx-agent".cyan().bold());
-        println!("  Running: {}", if status.running { "yes".green().to_string() } else { "no".red().to_string() });
-        println!("  PID: {}", status.pid.map(|v| v.to_string()).unwrap_or_else(|| "none".to_string()).cyan());
+        println!(
+            "  Running: {}",
+            if status.running {
+                "yes".green().to_string()
+            } else {
+                "no".red().to_string()
+            }
+        );
+        println!(
+            "  PID: {}",
+            status
+                .pid
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "none".to_string())
+                .cyan()
+        );
         println!("  State file: {}", status.state_path.dimmed());
         if let Some(last_scan) = status.last_scan_at_ms {
             println!("  Last scan at ms: {}", last_scan.to_string().cyan());

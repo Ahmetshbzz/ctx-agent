@@ -1,20 +1,19 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::*;
 use serde_json::json;
 use std::path::Path;
-use std::time::Instant;
 
-use ctx::analyzer;
 use ctx::db::Database;
-use ctx::git;
+use ctx::index::update_index;
 use ctx::watcher;
 
 use crate::cli::Commands;
 
 mod blast_radius;
 mod decisions;
-mod grep;
 mod ensure_watch;
+mod grep;
+mod health;
 mod init;
 mod learn;
 mod map;
@@ -26,13 +25,17 @@ mod watch;
 mod watch_status;
 
 pub fn run(command: Commands, root: &Path, json_mode: bool) -> Result<()> {
-    let skip_auto_watch = matches!(&command, Commands::Watch | Commands::EnsureWatch | Commands::WatchStatus);
+    let skip_auto_watch = matches!(
+        &command,
+        Commands::Watch | Commands::EnsureWatch | Commands::WatchStatus | Commands::Health
+    );
 
     match command {
         Commands::Init => init::cmd_init(root, json_mode)?,
         Commands::Scan => scan::cmd_scan(root, json_mode)?,
         Commands::Map => map::cmd_map(root, json_mode)?,
         Commands::Status => status::cmd_status(root, json_mode)?,
+        Commands::Health => health::cmd_health(root, json_mode)?,
         Commands::Query { term } => query::cmd_query(root, &term, json_mode)?,
         Commands::Grep {
             pattern,
@@ -49,8 +52,8 @@ pub fn run(command: Commands, root: &Path, json_mode: bool) -> Result<()> {
         Commands::WatchStatus => watch_status::cmd_watch_status(root, json_mode)?,
     }
 
-    // Agent-first default: keep context fresh in background unless this invocation is already `watch` or `ensure-watch`.
-    if !skip_auto_watch {
+    let auto_watch_disabled = std::env::var_os("CTX_AGENT_NO_WATCH").is_some();
+    if !skip_auto_watch && !auto_watch_disabled {
         watcher::ensure_background_watch(root).ok();
     }
 

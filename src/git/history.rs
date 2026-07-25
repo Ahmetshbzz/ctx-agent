@@ -5,6 +5,15 @@ use std::path::Path;
 
 use crate::db::Database;
 
+pub fn current_head(project_root: &Path) -> Option<String> {
+    Repository::open(project_root)
+        .ok()?
+        .head()
+        .ok()?
+        .target()
+        .map(|oid| oid.to_string())
+}
+
 /// Stats accumulated per file from git history
 #[derive(Debug, Default)]
 struct GitFileStats {

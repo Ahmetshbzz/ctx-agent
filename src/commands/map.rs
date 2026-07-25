@@ -1,5 +1,8 @@
 use super::*;
 
+const MAX_JSON_FILES: usize = 500;
+const MAX_JSON_SYMBOLS_PER_FILE: usize = 10;
+
 pub(super) fn cmd_map(root: &Path, json_mode: bool) -> Result<()> {
     let db = ensure_initialized(root)?;
     let files = db.get_all_files()?;
@@ -30,36 +33,60 @@ pub(super) fn cmd_map(root: &Path, json_mode: bool) -> Result<()> {
 
     if json_mode {
         let mut dirs = Vec::new();
+        let mut included_files = 0;
         for (dir, dir_files) in &dir_map {
-            let total_lines: i64 = dir_files.iter().map(|f| f.line_count).sum();
-            let languages: std::collections::HashSet<&str> =
-                dir_files.iter().map(|f| f.language.as_str()).collect();
-
+            let total_lines: i64 = dir_files.iter().map(|file| file.line_count).sum();
+            let languages: std::collections::BTreeSet<&str> = dir_files
+                .iter()
+                .map(|file| file.language.as_str())
+                .collect();
+            let remaining = MAX_JSON_FILES.saturating_sub(included_files);
+            let sampled_files = dir_files.iter().take(remaining);
             let mut file_entries = Vec::new();
-            for file in dir_files {
+            for file in sampled_files {
                 let symbols = db.get_symbols_for_file(file.id)?;
-                let sym_names: Vec<_> = symbols
+                let top_level_symbols = symbols
                     .iter()
-                    .filter(|s| s.parent_symbol_id.is_none())
-                    .map(|s| json!({"name": s.name, "kind": format!("{:?}", s.kind)}))
-                    .collect();
+                    .filter(|symbol| symbol.parent_symbol_id.is_none())
+                    .collect::<Vec<_>>();
+                let symbol_entries = top_level_symbols
+                    .iter()
+                    .take(MAX_JSON_SYMBOLS_PER_FILE)
+                    .map(
+                        |symbol| json!({"name": symbol.name, "kind": format!("{:?}", symbol.kind)}),
+                    )
+                    .collect::<Vec<_>>();
                 file_entries.push(json!({
                     "path": file.path,
                     "language": file.language,
                     "lines": file.line_count,
-                    "symbols": sym_names,
+                    "symbols": symbol_entries,
+                    "symbols_count": top_level_symbols.len(),
+                    "symbols_truncated": top_level_symbols.len() > MAX_JSON_SYMBOLS_PER_FILE,
                 }));
+                included_files += 1;
             }
 
+            let files_truncated = file_entries.len() < dir_files.len();
             dirs.push(json!({
                 "directory": dir,
                 "files_count": dir_files.len(),
                 "total_lines": total_lines,
                 "languages": languages.into_iter().collect::<Vec<_>>(),
                 "files": file_entries,
+                "files_truncated": files_truncated,
             }));
         }
-        println!("{}", json!({ "command": "map", "directories": dirs }));
+        println!(
+            "{}",
+            json!({
+                "command": "map",
+                "directories": dirs,
+                "total_files": files.len(),
+                "included_files": included_files,
+                "truncated": included_files < files.len(),
+            })
+        );
     } else {
         let project_name = root
             .file_name()

@@ -53,11 +53,8 @@ pub fn extract_scripting(
                     }
                 }
             }
-            "call" => {
-                // require/include in Ruby
-                if language == "ruby" {
-                    extract_ruby_require(child, source, imports);
-                }
+            "call" if language == "ruby" => {
+                extract_ruby_require(child, source, imports);
             }
 
             // ── Bash ───────────────────────────────────────────────────

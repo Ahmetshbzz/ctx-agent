@@ -10,7 +10,7 @@ pub(super) fn cmd_blast_radius(root: &Path, path: &str, json_mode: bool) -> Resu
                 println!(
                     "{}",
                     json!({
-                        "command": "blast_radius",
+                        "command": "blast-radius",
                         "error": format!("File not found: {}", path),
                     })
                 );
@@ -61,7 +61,7 @@ pub(super) fn cmd_blast_radius(root: &Path, path: &str, json_mode: bool) -> Resu
         println!(
             "{}",
             json!({
-                "command": "blast_radius",
+                "command": "blast-radius",
                 "file": path,
                 "imports": dep_list,
                 "imported_by": dep_of_list,

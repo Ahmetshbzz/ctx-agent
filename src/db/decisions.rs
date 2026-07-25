@@ -40,6 +40,6 @@ impl Database {
                 related_files: row.get(5)?,
             })
         })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 }

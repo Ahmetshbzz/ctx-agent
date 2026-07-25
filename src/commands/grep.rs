@@ -124,7 +124,10 @@ pub(super) fn cmd_grep(
             println!("    {}:{}  {}", h.file.cyan(), h.line, h.text);
         }
         if hits.len() >= limit {
-            println!("  {} result limit reached ({limit})", "INFO".yellow().bold());
+            println!(
+                "  {} result limit reached ({limit})",
+                "INFO".yellow().bold()
+            );
         }
     }
     println!();

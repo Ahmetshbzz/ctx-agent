@@ -115,7 +115,9 @@ pub fn scan_project(root: &Path) -> Result<Vec<ScannedFile>> {
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
-        let language = if file_name.eq_ignore_ascii_case("dockerfile") {
+        let language = if file_name == "go.mod" {
+            "gomod"
+        } else if file_name.eq_ignore_ascii_case("dockerfile") {
             "dockerfile"
         } else {
             match detect_language(ext) {

@@ -66,7 +66,7 @@ impl Database {
                     && outgoing_dependencies_count == 0,
             })
         })?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     // =================================================================
@@ -95,6 +95,6 @@ impl Database {
             "SELECT language, COUNT(*), SUM(line_count) FROM files GROUP BY language ORDER BY SUM(line_count) DESC"
         )?;
         let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
-        Ok(rows.filter_map(|r| r.ok()).collect())
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 }

@@ -35,6 +35,9 @@ pub enum Commands {
     /// Show project status dashboard
     Status,
 
+    /// Show machine-readable index health
+    Health,
+
     /// Search symbols and files
     Query {
         /// Search term

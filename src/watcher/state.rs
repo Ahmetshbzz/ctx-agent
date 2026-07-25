@@ -61,7 +61,11 @@ pub fn try_acquire_pid_lock(project_path: &Path) -> Result<bool> {
     let pid_file = pid_path(project_path);
     let pid = std::process::id().to_string();
 
-    match fs::OpenOptions::new().write(true).create_new(true).open(&pid_file) {
+    match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&pid_file)
+    {
         Ok(_) => {
             fs::write(pid_file, pid)?;
             Ok(true)

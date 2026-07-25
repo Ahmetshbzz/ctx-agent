@@ -14,28 +14,30 @@ pub fn execute_blast_radius(db: &Database, file_path: &str) -> Result<()> {
     };
 
     // Direct dependencies
-    let deps = db
-        .get_dependencies_of(file_id)?
-        .into_iter()
-        .fold(Vec::<(Option<i64>, String)>::new(), |mut acc: Vec<(Option<i64>, String)>, item| {
+    let deps = db.get_dependencies_of(file_id)?.into_iter().fold(
+        Vec::<(Option<i64>, String)>::new(),
+        |mut acc: Vec<(Option<i64>, String)>, item| {
             if !acc.iter().any(|existing| existing == &item) {
                 acc.push(item);
             }
             acc
-        });
-    let dependents = db
-        .get_dependents(file_id)?
-        .into_iter()
-        .fold(Vec::<(i64, String)>::new(), |mut acc: Vec<(i64, String)>, item| {
+        },
+    );
+    let dependents = db.get_dependents(file_id)?.into_iter().fold(
+        Vec::<(i64, String)>::new(),
+        |mut acc: Vec<(i64, String)>, item| {
             if !acc.iter().any(|existing| existing == &item) {
                 acc.push(item);
             }
             acc
-        });
+        },
+    );
     let sibling_modules = if let Some(parent) = file_path.rsplit_once('/') {
         db.get_all_files()?
             .into_iter()
-            .filter(|file| file.path != file_path && file.path.starts_with(&format!("{}/", parent.0)))
+            .filter(|file| {
+                file.path != file_path && file.path.starts_with(&format!("{}/", parent.0))
+            })
             .map(|file| file.path)
             .collect::<Vec<_>>()
     } else {
@@ -84,7 +86,11 @@ pub fn execute_blast_radius(db: &Database, file_path: &str) -> Result<()> {
             println!("    {} {}", "≈".dimmed(), path);
         }
         if sibling_modules.len() > 12 {
-            println!("    {} ... and {} more", "≈".dimmed(), sibling_modules.len() - 12);
+            println!(
+                "    {} ... and {} more",
+                "≈".dimmed(),
+                sibling_modules.len() - 12
+            );
         }
         println!();
     }

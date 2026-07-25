@@ -74,7 +74,7 @@ impl Database {
                 last_analyzed: row.get(6)?,
             })
         })?;
-        Ok(rows.filter_map(|row| row.ok()).collect())
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     /// Remove files not in the given list (for detecting deleted files)

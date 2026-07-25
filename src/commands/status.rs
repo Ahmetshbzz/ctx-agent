@@ -91,7 +91,11 @@ pub(super) fn cmd_status(root: &Path, json_mode: bool) -> Result<()> {
         println!("\n  {}", "Watch:".white().bold());
         println!(
             "    Running: {}",
-            if watch.running { "yes".green().to_string() } else { "no".red().to_string() }
+            if watch.running {
+                "yes".green().to_string()
+            } else {
+                "no".red().to_string()
+            }
         );
         if let Some(pid) = watch.pid {
             println!("    PID: {}", pid.to_string().cyan());
@@ -107,7 +111,10 @@ pub(super) fn cmd_status(root: &Path, json_mode: bool) -> Result<()> {
         }
         println!("    Dirty count: {}", watch.dirty_count.to_string().cyan());
         if !watch.recent_paths.is_empty() {
-            println!("    Recent paths: {}", watch.recent_paths.join(", ").dimmed());
+            println!(
+                "    Recent paths: {}",
+                watch.recent_paths.join(", ").dimmed()
+            );
         }
         if let Some(error) = watch.last_error.clone() {
             println!("    Last error: {}", error.red());

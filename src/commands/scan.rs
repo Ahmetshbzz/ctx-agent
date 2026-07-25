@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use super::*;
 
 pub(super) fn cmd_scan(root: &Path, json_mode: bool) -> Result<()> {
@@ -8,8 +10,9 @@ pub(super) fn cmd_scan(root: &Path, json_mode: bool) -> Result<()> {
         print!("  Scanning...");
     }
 
-    let result = analyzer::analyze_project(&db, root)?;
-    let git_result = git::analyze_git_history(&db, root)?;
+    let update = update_index(&db, root)?;
+    let result = &update.analysis;
+    let git_result = &update.git;
     let total_symbols = db.count_symbols()?;
     let total_dependencies = db.count_dependencies()?;
     let elapsed = start.elapsed();
@@ -28,6 +31,8 @@ pub(super) fn cmd_scan(root: &Path, json_mode: bool) -> Result<()> {
                 "symbols": total_symbols,
                 "dependencies": total_dependencies,
                 "commits_analyzed": git_result.commits_analyzed,
+                "git_skipped": update.git_skipped,
+                "index_generation": update.generation,
                 "elapsed_ms": elapsed.as_millis(),
             })
         );

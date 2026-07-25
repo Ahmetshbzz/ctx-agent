@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use super::*;
 
 pub(super) fn cmd_init(root: &Path, json_mode: bool) -> Result<()> {
@@ -31,7 +33,8 @@ pub(super) fn cmd_init(root: &Path, json_mode: bool) -> Result<()> {
         print!("  Scanning project...");
     }
 
-    let result = analyzer::analyze_project(&db, root)?;
+    let update = update_index(&db, root)?;
+    let result = &update.analysis;
 
     if !json_mode {
         println!(" {}", "done".green());
@@ -50,7 +53,7 @@ pub(super) fn cmd_init(root: &Path, json_mode: bool) -> Result<()> {
         print!("  Analyzing git history...");
     }
 
-    let git_result = git::analyze_git_history(&db, root)?;
+    let git_result = &update.git;
 
     if json_mode {
         let elapsed = start.elapsed();
@@ -64,6 +67,8 @@ pub(super) fn cmd_init(root: &Path, json_mode: bool) -> Result<()> {
                 "commits_analyzed": git_result.commits_analyzed,
                 "decisions_found": git_result.decisions_found,
                 "elapsed_ms": elapsed.as_millis(),
+                "index_generation": update.generation,
+                "git_skipped": update.git_skipped,
             })
         );
     } else {

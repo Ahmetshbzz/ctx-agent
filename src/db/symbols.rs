@@ -50,7 +50,7 @@ impl Database {
                 parent_symbol_id: row.get(7)?,
             })
         })?;
-        Ok(rows.filter_map(|row| row.ok()).collect())
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     /// Count total symbols
@@ -66,6 +66,6 @@ impl Database {
             .conn
             .prepare("SELECT kind, COUNT(*) FROM symbols GROUP BY kind ORDER BY COUNT(*) DESC")?;
         let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
-        Ok(rows.filter_map(|row| row.ok()).collect())
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 }
