@@ -276,6 +276,64 @@ def add(a: int, b: int) -> int:
         assert!(result.symbols[0].signature.contains("-> int"));
     }
 
+    #[test]
+    fn test_parse_python_module_constant() {
+        let source = r#"
+MAX_RETRIES = 3
+
+TOOL_SCHEMAS = [
+    {"type": "function"},
+    {"type": "function"},
+]
+
+TIMEOUT_SECONDS: int = 30
+"#;
+        let result = parse_file(source, "python").unwrap();
+        assert_eq!(result.symbols.len(), 3);
+
+        let retries = &result.symbols[0];
+        assert_eq!(retries.name, "MAX_RETRIES");
+        assert!(matches!(retries.kind, SymbolKind::Constant));
+        assert!(retries.signature.contains("MAX_RETRIES = 3"));
+
+        let schemas = &result.symbols[1];
+        assert_eq!(schemas.name, "TOOL_SCHEMAS");
+        assert!(matches!(schemas.kind, SymbolKind::Constant));
+        assert!(schemas.signature.contains("[2 elements]"));
+
+        let config = &result.symbols[2];
+        assert_eq!(config.name, "TIMEOUT_SECONDS");
+        assert!(config.signature.contains("TIMEOUT_SECONDS: int = 30"));
+    }
+
+    #[test]
+    fn test_parse_python_ignores_lowercase_assignments() {
+        let source = r#"
+logger = structlog.get_logger()
+_log = structlog.get_logger()
+result = compute()
+"#;
+        let result = parse_file(source, "python").unwrap();
+        assert_eq!(result.symbols.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_python_ignores_class_and_local_assignments() {
+        let source = r#"
+class Service:
+    LIMIT = 10
+
+    def run(self):
+        LOCAL = 5
+        return LOCAL
+"#;
+        let result = parse_file(source, "python").unwrap();
+        // Only the class + its method; LIMIT/LOCAL are not module-level.
+        assert_eq!(result.symbols.len(), 1);
+        assert_eq!(result.symbols[0].name, "Service");
+        assert_eq!(result.symbols[0].children.len(), 1);
+    }
+
     // =====================================================================
     // Edge cases
     // =====================================================================

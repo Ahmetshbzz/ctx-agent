@@ -35,7 +35,83 @@ pub fn extract_python(
                     imports.push(imp);
                 }
             }
+            // Module-level assignments capture constants/configs such as
+            // TOOL_SCHEMAS = [...] or MAX_RETRIES = 3 that agents query for.
+            "expression_statement" => {
+                if let Some(sym) = extract_python_module_constant(child, source) {
+                    symbols.push(sym);
+                }
+            }
             _ => {}
+        }
+    }
+}
+
+/// Extract a module-level constant from an expression-statement assignment.
+///
+/// Only ALL_CAPS-style names (optionally with digits/underscores, must contain
+/// at least one letter) are treated as constants; lowercase assignments like
+/// plain logger/result bindings are ignored to keep the index noise-free.
+fn extract_python_module_constant(node: Node, source: &[u8]) -> Option<ExtractedSymbol> {
+    let mut cursor = node.walk();
+    let assignment = node
+        .children(&mut cursor)
+        .find(|c| c.kind() == "assignment")?;
+    let left = assignment.child_by_field_name("left")?;
+    if left.kind() != "identifier" {
+        return None;
+    }
+    let name = node_text(left, source);
+    let is_constant = name.chars().any(|c| c.is_ascii_alphabetic())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+    if !is_constant {
+        return None;
+    }
+
+    let type_ann = assignment
+        .child_by_field_name("type")
+        .map(|t| node_text(t, source).to_string())
+        .map(|t| if t.starts_with(':') { t } else { format!(": {}", t) })
+        .unwrap_or_default();
+    let value_node = assignment.child_by_field_name("right")?;
+    let value_preview = value_preview(source, &value_node);
+
+    Some(ExtractedSymbol {
+        name: name.clone(),
+        kind: SymbolKind::Constant,
+        start_line: node.start_position().row + 1,
+        end_line: node.end_position().row + 1,
+        signature: format!("{}{} = {}", name, type_ann, value_preview),
+        children: vec![],
+    })
+}
+
+/// Render a compact one-line preview of an assignment value for signatures.
+/// Collections are summarized by their opening token + element count so the
+/// signature stays small even for multi-thousand-line literals.
+fn value_preview(source: &[u8], node: &Node) -> String {
+    const MAX_LEN: usize = 60;
+    match node.kind() {
+        "list" | "tuple" | "set" | "dictionary" => {
+            let (open, close) = match node.kind() {
+                "list" => ("[", "]"),
+                "dictionary" => ("{", "}"),
+                _ => ("(", ")"),
+            };
+            let count = node.named_child_count();
+            format!("{}{} elements{}", open, count, close)
+        }
+        _ => {
+            let raw = node_text(*node, source);
+            let one_line: String = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+            if one_line.chars().count() > MAX_LEN {
+                let truncated: String = one_line.chars().take(MAX_LEN).collect();
+                format!("{}...", truncated)
+            } else {
+                one_line
+            }
         }
     }
 }
