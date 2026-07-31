@@ -1,22 +1,15 @@
-# Code of Conduct
+# Davranış kuralları
 
-## Our standard
+Kısa tutuyorum, uzun metne gerek yok:
 
-Contributors are expected to:
-- Be respectful and professional.
-- Focus on technical substance.
-- Assume good intent and discuss disagreements constructively.
+- Saygılı ve profesyonel ol.
+- Teknik konuya odaklan, kişiye değil.
+- Anlaşmazlıkta iyi niyet varsay, konuşarak çöz.
 
-## Unacceptable behavior
+Kabul edilemeyecekler: taciz, nefret söylemi, ayrımcılık, tehdit, kişisel saldırı,
+doxxing, kasıtlı olarak süreci baltalama.
 
-- Harassment, hate speech, discrimination, or threats
-- Personal attacks or doxxing
-- Deliberate disruption of discussions or contribution process
+Kural ihlalinde içerik düzenlenebilir/kaldırılabilir; tekrarında katılım
+kısıtlanabilir.
 
-## Enforcement
-
-Maintainers may edit, hide, or remove content that violates this policy and may restrict participation for repeated violations.
-
-## Reporting
-
-Report Code of Conduct concerns through the maintainers' private channels or repository security/contact options.
+İhlal bildirimi için maintainer'a özel kanaldan ulaş.

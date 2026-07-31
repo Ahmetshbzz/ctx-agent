@@ -1,31 +1,32 @@
-# Security Policy
+# Güvenlik
 
-## Supported versions
+## Desteklenen sürümler
 
-Only the latest `main` branch is supported for security fixes.
+Sadece `main` dalının güncel hali destekleniyor.
 
-## Reporting a vulnerability
+## Güvenlik açığı bildirimi
 
-Do not open a public GitHub issue for security vulnerabilities.
+Lütfen herkese açık issue açma. GitHub Security Advisories üzerinden özel olarak
+bildir; o mümkün değilse maintainer'a özel kanaldan ulaş.
 
-Report privately using GitHub Security Advisories for this repository.
-If advisories are unavailable in your environment, open a private channel with maintainers before public disclosure.
+Bildirimde şunlar olsun:
 
-Include:
-- Affected version/commit
-- Reproduction steps
-- Impact assessment
-- Suggested fix (optional)
+- Etkilenen versiyon/commit
+- Nasıl tekrarlanır
+- Etkisi ne
+- Varsa fix önerisi
 
-Maintainers should acknowledge reports within 72 hours.
+72 saat içinde dönüş yapmaya çalışıyorum.
 
-## Scope
+## Kapsam
 
-This policy covers:
-- `ctx-agent` CLI
-- MCP server integration (`mcp-server/`)
-- Data handling in local SQLite storage
+Kapsam içi:
 
-Out of scope:
-- Third-party package vulnerabilities without a project-specific exploit path
-- Misconfiguration in external systems
+- `ctx` CLI
+- MCP server (`mcp-server/`)
+- Lokal SQLite'ta tutulan veriler
+
+Kapsam dışı:
+
+- Projeye özel exploit yolu olmayan üçüncü parti paket açıkları
+- Dış sistemlerin yanlış konfigürasyonu

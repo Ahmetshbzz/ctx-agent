@@ -1,262 +1,119 @@
-<p align="center">
-  <h1 align="center">ctx-agent</h1>
-  <p align="center"><strong>Agent Context Protocol</strong></p>
-  <p align="center">Structured codebase intelligence for AI agents.<br/>Local-first. Offline-capable. Zero dependencies.</p>
-</p>
+# ctx-agent
 
-<p align="center">
-  <img src="https://img.shields.io/badge/rust-stable-orange" alt="Rust">
-  <img src="https://img.shields.io/badge/sqlite-FTS5-blue" alt="SQLite">
-  <img src="https://img.shields.io/badge/MCP-compatible-green" alt="MCP">
-  <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="License">
-</p>
+> Kod tabanını AI agent'ların anlayacağı hale getiren küçük bir Rust CLI'si.
 
----
+![Rust](https://img.shields.io/badge/rust-stable-orange)
+![SQLite](https://img.shields.io/badge/sqlite-FTS5-blue)
+![MCP](https://img.shields.io/badge/MCP-compatible-green)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-> **One-liner:** ctx-agent lets an AI agent answer *"if I change this file, what breaks?"* without running the code.
+Kısaca: agent'a "bu dosyayı değiştirirsem ne bozulur?" sorusunu kodu çalıştırmadan
+cevaplayabileceği bir hafıza veriyor.
 
----
+## Neden yazdım
 
-## What is ctx-agent?
+AI agent'larla (Codex, Claude vs.) büyük repolarda çalışırken en çok vakit
+kaybettiren şey agent'ın dosya dosya gezip "acaba bu nereden çağrılıyor" diye
+aramasıydı. ctags tarzı araçlar sembol listesi veriyor ama agent'a dönük değiller;
+Sourcegraph gibi çözümler sunucu istiyor. İstediğim şey:
 
-**ctx-agent** is a Rust CLI that gives AI agents deep, structured understanding of any codebase. It scans your project, extracts symbols using tree-sitter, maps dependencies, analyzes git history, and stores everything in a SQLite file — queryable via CLI or [MCP protocol](https://modelcontextprotocol.io/).
+- kurcaladığım projeyi bir kere tarasın, SQLite'a yazsın,
+- agent MCP ile bağlanıp sembol/dependency/karar geçmişini sorgulasın,
+- internet olmadan, API key olmadan çalışsın.
 
-**No LLM required. No cloud. No API keys. Just intelligence.**
+ctx-agent bunu yapıyor. LLM yok, bulut yok, tek binary + SQLite.
 
-```
-$ ctx-agent init
-  ctx-agent — Agent Context Protocol
+## Ne yapar, ne yapmaz
 
-  OK Created /Users/you/.ctx-agent/projects/<project-hash>/ctx.db
-  Scanning project... done
-    21 files discovered
-    119 symbols extracted
-    61 dependencies mapped
-  Analyzing git history... done
-    8 commits analyzed
-    3 decisions extracted
+Yapar:
 
-  OK Initialized in 0.1s
-```
+- Projeyi tarayıp dosya/sembol/import çıkarır (tree-sitter ile)
+- Dependency graph ve "blast radius" hesaplar
+- Git geçmişinden conventional commit'lere bakıp karar kaydı çıkarır
+- FTS5 ile sembol araması, kırılgan/büyük/ölü dosya uyarıları
+- MCP server üzerinden agent'a servis eder
 
-## What ctx-agent is NOT
+Yapmaz:
 
-- **Not an LLM** — It doesn't generate code or answers. It provides structured context that agents consume.
-- **Not a linter/compiler** — It doesn't guarantee semantic correctness. It reads structure, not behavior.
-- **Not a runtime analyzer** — No execution tracing, profiling, or dynamic analysis. Purely static.
-- **Not a Language Server** — No code completion, go-to-definition, or refactoring. Different problem space.
+- Kod yazmaz, cevap üretmez (LLM değil)
+- Derleme/lint doğruluğu garanti etmez (statik yapısal analiz)
+- Runtime davranışı izlemez
+- LSP değildir, go-to-definition işi görmez
 
-## Features
+## Özellikler
 
-| Feature | Description |
-|---------|-------------|
-| **Codebase Map** | Directory tree with file counts, line counts, and symbols per file |
-| **Symbol Extraction** | Functions, classes, structs, interfaces, enums — with full signatures |
-| **Dependency Graph** | Import/export analysis with blast radius calculation |
-| **Decision Tracking** | Auto-extracts decisions from conventional commits |
-| **Full-Text Search** | FTS5-powered symbol search with partial matching |
-| **Health Warnings** | Fragile files, dead code, large file detection |
-| **Knowledge Notes** | Store architectural insights and gotchas |
-| **File Watcher** | Live re-analysis on file changes |
-| **MCP Server** | AI agents connect via Model Context Protocol |
-| **JSON Output** | Machine-readable output for agent consumption |
+| Özellik | Açıklama |
+|---------|----------|
+| Codebase map | Dizin ağacı, dosya/satır sayıları, dosya başına semboller |
+| Sembol çıkarma | Fonksiyon, class, struct, interface, enum, constant — imzalarıyla |
+| Dependency graph | Import/export analizi, blast radius |
+| Karar takibi | Conventional commit'lerden otomatik karar çıkarma |
+| Full-text arama | FTS5, kısmi eşleşme |
+| Sağlık uyarıları | Kırılgan dosyalar, ölü kod, büyük dosyalar |
+| Bilgi notları | `ctx learn` ile mimari not/gotcha kaydetme |
+| File watcher | Değişiklikte canlı yeniden analiz |
+| MCP server | Agent'lar Model Context Protocol ile bağlanır |
+| JSON çıktı | `--json` ile makine okunabilir çıktı |
 
-## How ctx-agent Compares
+## Dil desteği
 
-| Feature | ctx-agent | ctags/LSP | Sourcegraph | Copilot Context |
-|---------|-----------|-----------|-------------|-----------------|
-| Local-first | Yes | Yes | No (server) | No (cloud) |
-| Agent-native (MCP) | Yes | No | No | No |
-| Offline | Yes | Yes | No | No |
-| Incremental scan | Yes | Yes | No | N/A |
-| Blast radius | Yes | No | Yes | No |
-| Decision tracking | Yes | No | No | No |
-| Single portable file | Yes (SQLite) | Yes (tags) | No | No |
-| Health warnings | Yes | No | No | No |
+| Dil | Semboller | Importlar | Durum |
+|-----|-----------|-----------|-------|
+| Rust | fn, struct, enum, impl, mod | `use` | Tam |
+| TypeScript/JavaScript | function, class, interface, type, const | `import`/`export` | Tam |
+| Python | def, class, decorator, modül sabitleri (ALL_CAPS) | `import`/`from` | Tam |
+| Go | func, struct, interface, type | `import` | Tam |
+| C/C++, Java, C#, PHP, Ruby, Shell | Temel semboller | Temel | Kısmi |
+| Swift, Kotlin | Dosya takibi + satır sayısı | — | Planlanıyor |
 
-**ctx-agent fills a specific gap:** giving AI agents codebase memory without cloud, servers, or LLMs.
+> Sembol çıkarılmayan dillerde bile dosya takibi, satır sayısı ve git geçmişi
+> analizi çalışıyor.
 
-## Language Support
-
-| Language | Symbols | Imports | Status |
-|----------|---------|---------|--------|
-| **Rust** | Yes Functions, Structs, Enums, Impls, Modules | Yes `use` statements | Full |
-| **TypeScript/JavaScript** | Yes Functions, Classes, Interfaces, Types | Yes `import`/`export` | Full |
-| **Python** | Yes Functions, Classes, Decorators | Yes `import`/`from` | Full |
-| Go, Java, C/C++, Ruby, PHP, Swift, Kotlin | File tracking + line counts | No | Planned |
-
-> **Note:** Languages without symbol extraction still get file tracking, dependency counting via file references, and git history analysis.
-
-## Quick Start
-
-### Build from source
+## Kurulum
 
 ```bash
-git clone https://github.com/ahmetshbz1/ctx-agent.git && cd ctx-agent
+git clone https://github.com/Ahmetshbzz/ctx-agent.git && cd ctx-agent
 cargo build --release
+# binary: target/release/ctx
 ```
 
-### Initialize a project
+İstersen PATH'e at:
 
 ```bash
-cd your-project
-ctx-agent init
+ln -sf $(pwd)/target/release/ctx ~/.local/bin/ctx
 ```
 
-This creates a project-specific database under:
+## Kullanım
+
+```bash
+cd projenin-kök-dizini
+ctx init
+```
+
+İlk tarama birkaç saniye sürer, proje başına bir SQLite açılır:
 `~/.ctx-agent/projects/<project-hash>/ctx.db`
 
-### Explore
+Sonrası:
 
 ```bash
-# Project overview
-ctx-agent status
-
-# Directory tree with symbols
-ctx-agent map
-
-# Search for symbols
-ctx-agent query "parse"
-
-# Impact analysis
-ctx-agent blast-radius src/db/mod.rs
-
-# View decisions from git history
-ctx-agent decisions
-
-# Add a knowledge note
-ctx-agent learn "Auth module uses JWT with RS256"
-
-# Show warnings (fragile files, dead code)
-ctx-agent warnings
-
-# Live re-analysis on changes
-ctx-agent watch
-
-# JSON output for agents
-ctx-agent status --json
-ctx-agent query "parse" --json
+ctx status                          # proje özeti
+ctx map                             # dizin ağacı + sembol sayıları
+ctx query "parse"                   # sembol arama
+ctx grep "TODO"                     # ham metin arama (rg benzeri, gömülü)
+ctx blast-radius src/db/mod.rs      # etki analizi
+ctx decisions                       # git'ten çıkarılan kararlar
+ctx learn "Auth JWT RS256 kullanıyor"   # bilgi notu ekle
+ctx warnings                        # kırılgan/büyük/ölü dosyalar
+ctx watch                           # değişiklikte canlı analiz
+ctx status --json                   # agent için JSON
 ```
 
-## Real-World MCP Test
+Sonraki taramalar incremental: sadece değişen dosyalar yeniden analiz edilir
+(`ctx scan`).
 
-The following validation was executed using MCP tools only, against a production polyglot monorepo:
+## MCP server (agent entegrasyonu)
 
-- Files: 483
-- Lines: 77,235
-- Symbols: 3,169
-- Dependencies: 1,428
-- Decisions: 171
-- Incremental `ctx_scan` runtime in stable state: ~3.7s
-
-Observed MCP outcomes:
-
-- `ctx_query "auth"` returned 50 relevant results (cap reached).
-- `ctx_query "payment"` returned 28 relevant results.
-- `ctx_warnings` highlighted 13 large files for refactor prioritization.
-- `ctx_blast_radius` produced immediate impact context for selected files.
-
-Detailed report:
-
-- `docs/REAL_WORLD_MCP_VALIDATION.md`
-- `docs/AGENT_WORKFLOW.md`
-
-## Open Source Workflow
-
-This repository includes a standard OSS contribution flow:
-
-- `CONTRIBUTING.md` for contribution and local validation steps
-- `SECURITY.md` for vulnerability reporting policy
-- `CODE_OF_CONDUCT.md` for contributor behavior standards
-- `.github/ISSUE_TEMPLATE/` for structured bug/feature reports
-- `.github/pull_request_template.md` for consistent PR submissions
-- `.github/workflows/ci.yml` for automated Rust + MCP build checks
-
-Recommended flow:
-
-1. Open an issue (bug/feature template)
-2. Create a branch from `main`
-3. Implement and run local checks
-4. Open a PR using the template
-5. Merge after CI passes and review feedback is addressed
-
-## Decision Tracking
-
-ctx-agent extracts architectural decisions from your git history using [conventional commits](https://www.conventionalcommits.org/):
-
-```
-$ ctx-agent decisions
-
-  Decisions 3
-
-  2026-02-10 [commit] feat(auth): switch to JWT RS256 (a3b8d1)
-  2026-02-10 [commit] fix: FTS5 contentless table — use regular FTS5 (37fea0b)
-  2026-02-10 [commit] feat: add TypeScript MCP server (55247d9)
-```
-
-Commits with `feat:`, `fix:`, `refactor:`, or `BREAKING CHANGE:` are auto-captured as decisions.
-
-**Best practice:** Use descriptive commit messages to build a decision log:
-
-```bash
-git commit -m "feat(auth): switch to jwt rs256
-
-- why: symmetric keys leaked in staging config
-- impact: auth service, api gateway, mobile client
-- alternative: rotate HMAC keys (rejected — same risk class)"
-```
-
-## Health Warnings
-
-ctx-agent detects three categories of codebase risk:
-
-| Warning | Formula | Example |
-|---------|---------|---------|
-| **Fragile File** | `churn_score > 5.0 AND dependents > 3` | A file changed 20+ times that 5 other files depend on |
-| **Large File** | `line_count > 500` | Any file over 500 lines — candidate for splitting |
-| **Dead Code** | `commit_count = 0 AND dependents = 0` | Files with no git history and nothing imports them |
-
-```
-$ ctx-agent warnings
-
-  Warnings 2
-
-  Fragile files (high churn + many dependents):
-    · src/db/mod.rs — 12 changes, 8 dependents (churn: 7.2)
-
-  Large files (>500 lines):
-    · src/analyzer/parser.rs — 618 lines (rust)
-```
-
-## CLI Reference
-
-```
-Usage: ctx-agent [OPTIONS] <COMMAND>
-
-Commands:
-  init          Initialize ctx-agent in the current project
-  scan          Scan/re-scan the project (incremental)
-  map           Display codebase map with structure and stats
-  status        Show project status dashboard
-  query         Search symbols and files (FTS5)
-  blast-radius  Show blast radius of changing a file
-  decisions     Show recorded decisions
-  learn         Add a knowledge note
-  warnings      Show warnings (fragile files, dead code)
-  watch         Watch for file changes and re-analyze
-
-Options:
-  -p, --project <PROJECT>  Project root directory (defaults to cwd)
-      --json               Output in JSON format (for agent consumption)
-  -h, --help               Print help
-  -V, --version            Print version
-```
-
-## MCP Server
-
-ctx-agent includes a TypeScript MCP server that exposes all functionality to AI agents via the [Model Context Protocol](https://modelcontextprotocol.io/).
-
-### Setup
+`mcp-server/` altında TypeScript bir MCP server var:
 
 ```bash
 cd mcp-server
@@ -264,9 +121,7 @@ npm install
 npm run build
 ```
 
-### Configure
-
-Add to your MCP config (e.g. `mcp_config.json`):
+MCP config'e ekle:
 
 ```json
 {
@@ -279,92 +134,145 @@ Add to your MCP config (e.g. `mcp_config.json`):
 }
 ```
 
-### Available MCP Tools
+Araçlar: `ctx_init`, `ctx_status`, `ctx_map`, `ctx_scan`, `ctx_query`, `ctx_grep`,
+`ctx_blast_radius`, `ctx_decisions`, `ctx_learn`, `ctx_warnings`, `ctx_overview`,
+`ctx_guard`.
 
-| Tool | Description |
-|------|-------------|
-| `ctx_init` | Initialize ctx-agent in a project |
-| `ctx_status` | Project dashboard |
-| `ctx_map` | Codebase structure map |
-| `ctx_scan` | Incremental re-scan |
-| `ctx_query` | Full-text symbol search (auto built-in text-search fallback when empty) |
-| `ctx_grep` | Ripgrep-style repository text search via built-in Rust engine |
-| `ctx_blast_radius` | File impact analysis |
-| `ctx_decisions` | Decision history |
-| `ctx_learn` | Store knowledge notes |
-| `ctx_warnings` | Codebase health warnings |
-| `ctx_overview` | Agent-ready project brief (purpose, users, modules, flows) |
-| `ctx_guard` | Paranoid security gate for auth/session/token/crypto changes |
+Bilinen davranışlar:
 
-> **Auto-init:** If a project hasn't been initialized, any MCP tool call will auto-run `ctx-agent init` first. No manual setup needed.
-> **Auto overview bootstrap:** `ctx_status` now auto-creates a first project overview note when `knowledge_notes = 0`.
-> **Watch behavior:** agent commands auto-start per-project background watch by default (disable with `CTX_AGENT_DISABLE_AUTO_WATCH=1`).
-> **Paranoid mode:** Enabled by default in MCP (`CTX_PARANOID=1`). `ctx_status` includes a security guard section and can report `BLOCK` for sensitive changes missing critical controls.
-> **Search fallback:** `ctx_query` automatically falls back to `ctx-agent grep` (built-in, no external `rg` dependency) when symbol search returns no results.
-> **Activity memory:** Every MCP tool call is appended to a project activity journal (`~/.ctx-agent/activity/<project-hash>.jsonl`). The last-5 summary is shown once at the first tool response in a server session to avoid output spam.
+- Proje initialize edilmemişse ilk MCP çağrısı otomatik `init` çalıştırır.
+- `ctx_status`, hiç bilgi notu yoksa ilk seferde bir overview notu oluşturur.
+- Agent komutları arka planda watch başlatır (kapatmak için
+  `CTX_AGENT_DISABLE_AUTO_WATCH=1`).
+- `ctx_query` sembol araması boş dönerse otomatik olarak metin aramasına düşer.
+- Paranoid mod varsayılan açık (`CTX_PARANOID=1`): auth/session/token/crypto
+  değişikliklerinde `ctx_guard` BLOCK/PASS raporlar.
+- Her MCP çağrısı `~/.ctx-agent/activity/<project-hash>.jsonl` günlüğüne yazılır.
 
-## Architecture
+## Karar takibi
+
+Conventional commit kullanıyorsan `feat:`, `fix:`, `refactor:` ve
+`BREAKING CHANGE:` içeren commit'ler otomatik karar olarak kaydedilir:
+
+```
+$ ctx decisions
+
+  Decisions 3
+
+  2026-02-10 [commit] feat(auth): switch to JWT RS256 (a3b8d1)
+  2026-02-10 [commit] fix: FTS5 contentless table — use regular FTS5 (37fea0b)
+  2026-02-10 [commit] feat: add TypeScript MCP server (55247d9)
+```
+
+Commit mesajlarını düzgün yazarsan bedavaya mimari karar günlüğün olur.
+
+## Sağlık uyarıları
+
+| Uyarı | Kural | Anlamı |
+|-------|-------|--------|
+| Fragile file | `churn_score > 5.0` ve `dependents > 3` | Çok değişen + çok kullanılan dosya |
+| Large file | `line_count > 500` | Bölme adayı |
+| Dead code | commit yok ve kimse import etmiyor | Muhtemelen silinebilir |
+
+```
+$ ctx warnings
+
+  Warnings 2
+
+  Fragile files (high churn + many dependents):
+    · src/db/mod.rs — 12 changes, 8 dependents (churn: 7.2)
+
+  Large files (>500 lines):
+    · src/analyzer/parser.rs — 618 lines (rust)
+```
+
+## CLI referansı
+
+```
+Usage: ctx [OPTIONS] <COMMAND>
+
+Commands:
+  init          Initialize ctx-agent in the current project
+  scan          Scan/re-scan the project (incremental)
+  map           Display codebase map with structure and stats
+  status        Show project status dashboard
+  health        Machine-readable index health
+  query         Search symbols and files (FTS5)
+  grep          Raw text search (built-in, rg-like)
+  blast-radius  Blast radius of changing a file
+  decisions     Recorded decisions
+  learn         Add a knowledge note
+  warnings      Warnings (fragile files, dead code, large files)
+  watch         Watch for changes and re-analyze
+  ensure-watch  Init + background watch
+  watch-status  Background watcher health
+
+Options:
+  -p, --project <PROJECT>  Project root (default: cwd)
+      --json               JSON output
+  -h, --help               Help
+  -V, --version            Version
+```
+
+## Mimari
 
 ```
 ctx-agent/
 ├── src/
-│   ├── main.rs              # Entry point
-│   ├── cli.rs               # CLI definitions (commands/options)
-│   ├── commands/            # Command handlers
-│   ├── lib.rs               # Module exports
+│   ├── main.rs              # entry point
+│   ├── cli.rs               # komut tanımları
+│   ├── commands/            # komut implementasyonları
 │   ├── db/
-│   │   ├── mod.rs           # DB core (open/exists/binding)
-│   │   ├── dependencies.rs  # Dependency persistence + resolution
-│   │   ├── search.rs        # FTS5 index + query
-│   │   ├── decisions.rs     # Decision operations
-│   │   ├── knowledge.rs     # Knowledge note operations
-│   │   ├── stats.rs         # Health + aggregate stats
-│   │   ├── models.rs        # Data models (TrackedFile, SymbolKind, etc.)
-│   │   └── schema.rs        # Schema migrations
+│   │   ├── mod.rs           # DB core (open/exists)
+│   │   ├── dependencies.rs  # dependency persistence + çözümleme
+│   │   ├── search.rs        # FTS5 index + sorgu
+│   │   ├── decisions.rs     # karar işlemleri
+│   │   ├── knowledge.rs     # bilgi notları
+│   │   ├── stats.rs         # sağlık + aggregate istatistik
+│   │   ├── models.rs        # veri modelleri
+│   │   └── schema.rs        # şema migrasyonları
 │   ├── analyzer/
-│   │   ├── mod.rs           # Orchestrator
-│   │   ├── scanner.rs       # File discovery + .gitignore
-│   │   ├── parser/
-│   │   │   ├── mod.rs       # Parser dispatch
-│   │   │   ├── rust_ext.rs  # Rust extraction
-│   │   │   ├── typescript.rs # TS/JS extraction
-│   │   │   ├── python.rs    # Python extraction
-│   │   │   ├── go.rs        # Go extraction
-│   │   │   ├── c_cpp.rs     # C/C++ extraction
-│   │   │   ├── java_sharp.rs # Java/C# extraction
-│   │   │   └── scripting.rs # PHP/Ruby/Shell extraction
-│   │   └── graph.rs         # Dependency graph + blast radius
-│   ├── git/
-│   │   └── history.rs       # Commit analysis + churn scoring
-│   ├── query/
-│   │   ├── search.rs        # FTS5 search
-│   │   └── blast.rs         # Blast radius display
-│   └── watcher/
-│       └── mod.rs           # File watcher daemon
-└── mcp-server/
-    ├── src/index.ts         # TypeScript MCP server (auto-init + overview bootstrap)
-    ├── tsconfig.json
-    └── package.json
+│   │   ├── mod.rs           # orkestratör
+│   │   ├── scanner.rs       # dosya keşfi + .gitignore
+│   │   ├── parser/          # dil başına tree-sitter extractor'lar
+│   │   └── graph.rs         # dependency graph + blast radius
+│   ├── git/history.rs       # commit analizi + churn skoru
+│   ├── query/               # arama + blast radius görünümü
+│   └── watcher/             # dosya izleyici
+└── mcp-server/              # TypeScript MCP server
 ```
 
-## How It Works
+## Nasıl çalışıyor
 
-1. **Scan** — Walks the project directory respecting `.gitignore`, detects languages, computes file hashes
-2. **Parse** — Uses tree-sitter to extract symbols and imports from supported languages
-3. **Store** — Everything goes into a project-specific SQLite file (`~/.ctx-agent/projects/<project-hash>/ctx.db`) with WAL mode
-4. **Index** — FTS5 virtual table indexes all symbols for instant search
-5. **Analyze** — Git history provides churn scores, contributor data, and decision extraction
-6. **Serve** — CLI or MCP protocol for AI agent integration
+1. **Scan** — `.gitignore`'a uyarak dizini gezer, dil tespiti ve dosya hash'i çıkarır
+2. **Parse** — tree-sitter ile desteklenen dillerden sembol/import çıkarır
+3. **Store** — Her şey proje başına bir SQLite dosyasına (WAL mode)
+4. **Index** — Semboller FTS5 virtual table'a yazılır, arama anında
+5. **Analyze** — Git geçmişinden churn skoru ve karar çıkarımı
+6. **Serve** — CLI ya da MCP üzerinden agent'a sunulur
 
-## Design Principles
+## Tasarım prensipleri
 
-- **Local-first** — All data stays on your machine
-- **Offline-capable** — No internet, no API keys, no cloud
-- **Incremental** — File hashes track changes; only changed files are re-analyzed
-- **Zero runtime deps** — Single binary, no Docker, no services
-- **Agent-native** — Built for MCP and agent workflows
-- **Machine-readable** — `--json` output for programmatic consumption
+- Local-first: veri makinende kalır
+- Offline: internet, API key, hesap yok
+- Incremental: hash bazlı, sadece değişen dosya yeniden analiz edilir
+- Tek binary: runtime bağımlılığı yok
+- Agent-native: MCP birinci sınıf vatandaş
+- `--json` her yerde
 
-## License
+## Gerçek proje validasyonu
+
+Production polyglot bir monorepo'da (TypeScript + Go + Swift, 483 dosya,
+77k satır) MCP üzerinden test edildi; detaylar:
+
+- [docs/REAL_WORLD_MCP_VALIDATION.md](docs/REAL_WORLD_MCP_VALIDATION.md)
+- [docs/AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)
+
+## Katkı
+
+[CONTRIBUTING.md](CONTRIBUTING.md)'ye bak. Güvenlik bulguları için
+[SECURITY.md](SECURITY.md).
+
+## Lisans
 
 MIT

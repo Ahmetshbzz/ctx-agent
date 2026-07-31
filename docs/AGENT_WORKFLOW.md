@@ -1,48 +1,48 @@
-# Agent Workflow with ctx-agent
+# Agent workflow: ctx-agent ile çalışma düzeni
 
-## Goal
+Amaç basit: agent oturumu dosya gezerek değil, ctx-agent'ın hazırladığı bağlamla
+başlasın. Böylece ilk dakikalardaki kör gezinti ortadan kalkıyor.
 
-Use `ctx-agent` as the first context layer so each agent session starts with project memory instead of blind file traversal.
+## Oturum başlangıcı
 
-## Baseline Workflow
+1. `ctx_status` — proje özeti. İlk çalıştırmada (hiç bilgi notu yoksa) bir
+   overview notu otomatik oluşur.
+2. `ctx_warnings` — büyük/kırılgan/ölü dosyalar. Edit yapmadan önce risk
+   haritası burada.
+3. 2-3 tane odaklı `ctx_query` — tek geniş sorgu yerine domain bazlı terimler
+   (`auth`, `session`, `payment` gibi). Sembol araması boş dönerse kendisi metin
+   aramasına düşüyor.
 
-1. Project overview
-- `ctx_status`
-- If this is the first run (`knowledge_notes = 0`), `ctx_status` auto-bootstraps and stores an overview note
-- `ctx_overview` (explicit project brief generation)
-- `ctx_map` (optional for structure-heavy tasks)
+Yapı ağırlıklı işlerde `ctx_map` de faydalı ama her seferinde şart değil.
 
-2. Risk check before edits
-- `ctx_warnings`
-- `ctx_blast_radius` on candidate files
-- `ctx_guard` for paranoid auth/session/token/crypto gate (BLOCK/PASS)
+## Edit öncesi
 
-3. Target discovery
-- `ctx_query "<feature-or-bug-keyword>"`
-- If symbol search is empty, `ctx_query` auto-falls back to text search
-- Use `ctx_grep` directly for route/path/string-heavy searches
-- Run multiple focused terms instead of a single broad query
+- Değiştirmeyi düşündüğün dosyaya `ctx_blast_radius` çalıştır. Kimler import
+  ediyor gör, ona göre davran.
+- auth/session/token/crypto tarafına dokunuyorsan `ctx_guard` çalıştır;
+  BLOCK dönerse eksik kontrol var demektir.
 
-4. Editing loop
-- Edit code
-- `ctx_scan`
-- Re-check with `ctx_query` or `ctx_blast_radius`
+## Edit sonrası
 
-5. Session closure
-- Add explicit rationale via `ctx_learn` for non-obvious architectural choices
+1. `ctx_scan` — incremental yeniden analiz (sadece değişenler).
+2. Gerekirse tekrar `ctx_query` / `ctx_blast_radius` ile doğrula.
+3. Bariz olmayan bir mimari karar verdiysen `ctx_learn` ile not düş. Bir sonraki
+   oturumda agent bunu görecek.
 
-## Heuristics
+## Deneyimlerim
 
-- If `ctx_query` returns too many hits, split by domain term (`auth`, `session`, `token`, etc.).
-- If `ctx_warnings` reports large files, prefer incremental extraction/refactor before feature additions.
-- If `ctx_decisions` is rich, use it early to avoid reintroducing previously rejected patterns.
+- `ctx_query` çok sonuç döndürüyorsa terimi daralt; domain kelimesi ekle.
+- `ctx_warnings`'ta büyük dosya varsa yeni feature'dan önce o dosyayı bölmek
+  genelde daha ucuz oluyor.
+- `ctx_decisions` doluysa önce ona bak — daha önce reddedilmiş bir pattern'i
+  tekrar önermek gereksiz.
 
-## Command Equivalents (CLI)
+## CLI karşılıkları
 
 ```bash
-ctx-agent -p /path/to/project status --json
-ctx-agent -p /path/to/project warnings --json
-ctx-agent -p /path/to/project query "auth" --json
-ctx-agent -p /path/to/project blast-radius src/db/mod.rs --json
-ctx-agent -p /path/to/project scan --json
+ctx -p /path/to/project status --json
+ctx -p /path/to/project warnings --json
+ctx -p /path/to/project query "auth" --json
+ctx -p /path/to/project blast-radius src/db/mod.rs --json
+ctx -p /path/to/project scan --json
 ```

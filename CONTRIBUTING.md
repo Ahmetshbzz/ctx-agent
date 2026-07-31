@@ -1,34 +1,29 @@
-# Contributing to ctx-agent
+# Katkı
 
-Thanks for contributing.
+Önce issue aç, neyi değiştirmek istediğini konuşalım. Büyük değişikliklerde bu
+özellikle önemli — boşa emek harcamayalım.
 
-## Development setup
+## Geliştirme ortamı
 
-Requirements:
-- Rust stable toolchain
-- Node.js 18+
+Gerekenler:
 
-Install and build:
+- Rust (stable)
+- Node.js 18+ (sadece MCP server için)
 
 ```bash
 cargo build
 cd mcp-server && npm install && npm run build
 ```
 
-## Branching and commits
+## Dal ve commit düzeni
 
-- Create a feature branch from `main`.
-- Keep commits focused and small.
-- Use clear commit messages (recommended: Conventional Commits).
+- `main`'den feature dalı aç.
+- Commit'leri küçük ve odaklı tut.
+- Commit mesajında ne yaptığın ve neden yaptığın belli olsun; Conventional
+  Commits (`feat:`, `fix:` vs.) kullanırsan `ctx decisions` bunları karar olarak
+  da topluyor, güzel oluyor.
 
-Examples:
-- `feat: add security guard output to ctx_status`
-- `fix: handle missing project path in MCP tool`
-
-## Pull request process
-
-1. Sync with latest `main`.
-2. Run checks locally:
+## PR açmadan önce
 
 ```bash
 cargo test
@@ -36,18 +31,16 @@ cargo clippy --all-targets -- -D warnings
 cd mcp-server && npm run build
 ```
 
-3. Update docs when behavior changes.
-4. Open a PR using the template.
+Davranış değiştiriyorsan ilgili dokümanı da güncelle (README veya docs/).
 
-## Coding standards
+## Genel prensipler
 
-- Keep changes minimal and targeted.
-- Prefer deterministic behavior for agent-facing output.
-- Avoid introducing breaking CLI/MCP changes without migration notes.
-- Do not include secrets or credentials.
+- Değişiklik minimal ve hedefli olsun.
+- Agent'a dönen çıktılar deterministik kalsın (`--json` kırılmasın).
+- CLI/MCP'de geriye dönük kırılma yapacaksan PR açıklamasında belirt.
+- Secret, token, credential hiçbir şekilde repoya girmesin.
 
-## Reporting issues
+## Issue açarken
 
-- Use issue templates for bugs and feature requests.
-- Provide exact steps, expected behavior, and actual behavior.
-- Include environment details (OS, Rust version, Node version, `ctx-agent --version`).
+Bug bildiriminde şunlar olsun: ne yaptın, ne bekliyordun, ne oldu, ortam bilgisi
+(OS, Rust versiyonu, `ctx --version`).

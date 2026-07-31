@@ -1,79 +1,54 @@
-# Real-World MCP Validation
+# Gerçek proje validasyonu (MCP)
 
-Project under test: a production polyglot monorepo (TypeScript, Go, Swift)
-Validation mode: MCP tools only (`ctx_init`, `ctx_status`, `ctx_scan`, `ctx_query`, `ctx_blast_radius`, `ctx_warnings`, `ctx_decisions`)
+Test ettiğim proje: production'da çalışan polyglot bir monorepo
+(TypeScript + Go + Swift).
 
-## Summary
+Sadece MCP araçları kullanıldı: `ctx_init`, `ctx_status`, `ctx_scan`, `ctx_query`,
+`ctx_blast_radius`, `ctx_warnings`, `ctx_decisions`.
 
-`ctx-agent` provided high-value project context to an agent without running the target application.
-The tested project is non-trivial and polyglot:
+## Projenin boyutu
 
-- Files: 483
-- Lines: 77,235
-- Symbols: 3,169
-- Dependencies: 1,428
-- Decisions tracked: 171
+- 483 dosya, ~77.235 satır
+- 3.169 sembol, 1.428 dependency
+- 171 karar (git geçmişinden)
 
-## MCP Calls and Outcomes
+## Sonuçlar
 
-1. `ctx_init`
-- Result: already initialized, re-scan completed
-- Re-scan time: ~3.7s
-- Changed files analyzed: 0 (483 unchanged)
+`ctx_init`: proje zaten initialize'lıydı, re-scan ~3.7s sürdü (483 dosyanın 0'ı
+değişmişti — incremental çalışıyor).
 
-2. `ctx_status`
-- Returned full dashboard with language distribution:
-- TypeScript: 260 files
-- Go: 131 files
-- JSON: 24 files
-- Swift: 23 files
-- Markdown: 14 files
+`ctx_status`: dil dağılımı doğru geldi — TypeScript 260, Go 131, JSON 24,
+Swift 23, Markdown 14 dosya.
 
-3. `ctx_query "auth"`
-- Result count: 50 (capped)
-- Immediate hits in backend auth helpers, JWT paths, telegram auth store, panel auth context
+`ctx_query "auth"`: 50 sonuç (üst limite takıldı). Backend auth helper'ları, JWT
+yolları, telegram auth store, panel auth context ilk sayfada.
 
-4. `ctx_query "payment"`
-- Result count: 28
-- Immediate hits in payment UI flow components and forms
+`ctx_query "payment"`: 28 sonuç, payment UI akışı ve formlar ilk sayfada.
 
-5. `ctx_warnings`
-- Total warnings: 13
-- All warnings were large files (no fragile/dead warnings in this run)
+`ctx_warnings`: 13 uyarı, hepsi büyük dosya (>500 satır). Bu koşuda kırılgan/ölü
+dosya uyarısı çıkmadı.
 
-6. `ctx_blast_radius apps/core/internal/admin/handler.go`
-- Imports: 19
-- Imported by: 0
-- Risk: low
+`ctx_blast_radius apps/core/internal/admin/handler.go`: 19 import, 0 imported-by
+→ düşük risk.
 
-7. `ctx_decisions`
-- Decisions available: 171
-- Practical value: fast architectural context recovery from commit history
+`ctx_decisions`: 171 karar. Commit geçmişinden mimari bağlamı çıkarmak düşündüğümden
+hızlı çalıştı.
 
-## What This Means for Agents
+## Agent açısından anlamı
 
-In a fresh session, an agent can quickly recover:
+Yeni bir oturumda agent birkaç dakika içinde şunları öğreniyor:
 
-- Current architecture shape
-- Relevant code areas for a task keyword
-- High-risk or oversized files before editing
-- Historical intent from commit-derived decisions
+- mimarinin kabaca şekli,
+- işle ilgili kod bölgeleri,
+- edit öncesi riskli/büyük dosyalar,
+- geçmişte verilmiş kararlar (commit'lerden).
 
-This reduces blind exploration and improves first-attempt edit quality.
+Kör gezinti azalıyor, ilk denemede doğru yere edit yapma şansı artıyor.
 
-## Known Practical Limits
+## Bildiğim sınırlar
 
-- Blast radius quality depends on import extraction quality per language.
-- Query output is capped to top matches; agents should run multiple targeted queries.
-- Health signals are structural; they do not replace runtime testing.
-
-## Recommended MCP Startup Sequence
-
-For every new agent session on a repo:
-
-1. `ctx_status`
-2. `ctx_warnings`
-3. 2-3 targeted `ctx_query` calls
-4. `ctx_blast_radius` for candidate files before edits
-5. `ctx_scan` after edits
-
+- Blast radius kalitesi, dilin import çıkarma kalitesine bağlı. Sembol çıkarılmayan
+  dillerde graph eksik kalır.
+- Query çıktısı üstten kırpılıyor; tek geniş sorgu yerine birkaç odaklı sorgu
+  atmak lazım.
+- Sağlık sinyalleri yapısal; test/çalıştırma yerine geçmez.
